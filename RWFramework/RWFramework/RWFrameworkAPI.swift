@@ -283,7 +283,7 @@ extension RWFramework {
                 self.streamURL = URL(string: stream_url)!
                 if let stream_id = dict["stream_id"]?.int {
                     self.streamID = stream_id
-                    self.createPlayer()
+//                    self.createPlayer()
                     self.requestStreamSucceeded = true
                     // pause stream on server so that assets aren't added until user is actually listening
                     apiPostStreamsIdPause()
