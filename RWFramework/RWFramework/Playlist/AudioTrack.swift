@@ -251,19 +251,16 @@ private class TimedTrackState: TrackState {
         timer?.invalidate()
         timeLeft -= Date().timeIntervalSince(lastResume)
     }
-    @available(iOS 10.0, *)
+    
     func setupTimer() -> Timer {
         return Timer.scheduledTimer(withTimeInterval: timeLeft, repeats: false) { _ in
             self.goToNextState()
         }
     }
+
     func resume() {
         lastResume = Date()
-        if #available(iOS 10.0, *) {
-            timer = setupTimer()
-        } else {
-            // Fallback on earlier versions
-        }
+        timer = setupTimer()
     }
 }
 
@@ -314,7 +311,6 @@ private class FadingIn: TimedTrackState {
         super.init(duration: fadeInDur)
     }
     
-    @available(iOS 10.0, *)
     override func setupTimer() -> Timer {
         return Timer.scheduledTimer(
             withTimeInterval: FadingIn.updateInterval,
@@ -414,7 +410,6 @@ private class FadingOut: TimedTrackState {
         super.init(duration: duration)
     }
     
-    @available(iOS 10.0, *)
     override func setupTimer() -> Timer {
         return Timer.scheduledTimer(
             withTimeInterval: FadingOut.updateInterval,
@@ -457,7 +452,6 @@ private class WaitingForAsset: TimedTrackState {
         super.init(duration: 0)
     }
     
-    @available(iOS 10.0, *)
     override func setupTimer() -> Timer {
         return Timer.scheduledTimer(
             withTimeInterval: WaitingForAsset.updateInterval,
