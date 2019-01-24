@@ -78,8 +78,8 @@ import SpriteKit
 
 }
 
-//extension AudioSceneRenderer: SCNSceneRenderer {
-//    @objc public func prepare(_ object: Any, shouldAbortBlock block: (() -> Bool)? = nil) -> Bool {
-//        return true
-//    }
-//}
+extension AudioSceneRenderer: SCNSceneRenderer {
+    func prepare(_ object: Any, shouldAbortBlock block: (() -> Bool)? = nil) -> Bool {
+        return false
+    }
+}
