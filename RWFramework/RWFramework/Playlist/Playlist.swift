@@ -58,10 +58,18 @@ class Playlist {
         self.filters = AllAssetFilters(filters)
         self.sortMethods = sortBy
 
-        // Setup audio engine & mixer
-        audioEngine.attach(audioMixer)
-        audioEngine.connect(audioMixer, to: audioEngine.outputNode, format: nil)
-        try! audioEngine.start()
+        // Push audio attenuation to far away
+        audioMixer.distanceAttenuationParameters.referenceDistance = 100_000
+        audioMixer.distanceAttenuationParameters.maximumDistance = 200_000
+
+        do {
+            // Setup audio engine & mixer
+            audioEngine.attach(audioMixer)
+            audioEngine.connect(audioMixer, to: audioEngine.outputNode, format: nil)
+            try audioEngine.start()
+        } catch {
+            print(error)
+        }
     }
 }
 
@@ -78,6 +86,7 @@ extension Playlist {
     }
     
     /// Prepares all the speakers for this project.
+    @discardableResult
     private func updateSpeakers() -> Promise<[Speaker]> {
         return RWFramework.sharedInstance.apiGetSpeakers([
             "project_id": String(project.id),
@@ -114,9 +123,12 @@ extension Playlist {
     }
 
     private func playDemoStream() {
+        guard let params = self.currentParams
+            else { return }
+
         // distance to nearest point on a speaker shape
         let distToSpeaker = self.speakers.lazy.map {
-            $0.distance(to: self.currentParams!.location)
+            $0.distance(to: params.location)
         }.min() ?? 0
 
         print("dist to nearest speaker: \(distToSpeaker)")
@@ -192,13 +204,15 @@ extension Playlist {
                         it.playNext(premature: false)
                     }
                 }
-            }.catch { err in }
+            }.catch { err in
+                print(err)
+            }
         } else {
             self.tracks.forEach { it in
                 if it.currentAsset == nil {
                     it.playNext(premature: false)
-                } else {
-                    it.updateParams(currentParams!)
+                } else if let params = currentParams {
+                    it.updateParams(params)
                 }
             }
         }
@@ -234,7 +248,10 @@ extension Playlist {
                 })
             }
             print("\(self.allAssets.count) total assets")
-        }.catch { err in }
+        }.catch { err in
+            print(err)
+            self.lastUpdate = Date()
+        }
     }
     
     /// Framework should call this when stream parameters are updated.
@@ -255,10 +272,10 @@ extension Playlist {
                 roll: 0
             )
         }
-        let pos = opts.location.toAudioPoint()
+        
+        let pos = AVAudio3DPoint(x: 0, y: 0, z: 0)
         self.audioMixer.listenerPosition = pos
         self.audioMixer.position = pos
-        print("current listener position: \(pos)")
     }
     
     private func updateParams() {        
@@ -382,6 +399,22 @@ extension CLLocation {
             x: Float(coord.longitude * mult),
             y: 0.0,
             z: -Float(coord.latitude * mult)
+        )
+    }
+    
+    func toAudioPoint(relativeTo other: CLLocation) -> AVAudio3DPoint {
+        let latCoord = CLLocation(latitude: self.coordinate.latitude, longitude: other.coordinate.longitude)
+        let lngCoord = CLLocation(latitude: other.coordinate.latitude, longitude: self.coordinate.longitude)
+        let latDist = latCoord.distance(from: other)
+        let lngDist = lngCoord.distance(from: other)
+        let latDir = (self.coordinate.latitude - other.coordinate.latitude).sign
+        let latMult = latDir == .plus ? -1.0 : 1.0
+        let lngDir = (self.coordinate.longitude - other.coordinate.longitude).sign
+        let lngMult = lngDir == .plus ? 1.0 : -1.0
+        return AVAudio3DPoint(
+            x: Float(lngDist * lngMult),
+            y: 0.0,
+            z: Float(latDist * latMult)
         )
     }
 }
