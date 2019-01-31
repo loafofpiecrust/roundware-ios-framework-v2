@@ -260,12 +260,10 @@ extension Playlist {
             return
         }
 
-        print("assets: updating params")
         self.currentParams = opts
         self.updateParams()
 
         if let heading = opts.heading {
-            print("current heading angle: \(heading)")
             self.audioMixer.listenerAngularOrientation = AVAudio3DAngularOrientation(
                 yaw: Float(heading),
                 pitch: 0,
@@ -278,8 +276,7 @@ extension Playlist {
         self.audioMixer.position = pos
     }
     
-    private func updateParams() {        
-        print("assets: updating speakers")
+    private func updateParams() {
         updateSpeakerVolumes()
         // TODO: Use a filter to clear data for assets we've moved away from.
         

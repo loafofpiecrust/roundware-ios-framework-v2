@@ -101,7 +101,6 @@ extension AudioTrack {
 
     private func setDynamicPan(at assetLoc: CLLocation, _ params: StreamParams) {
         player.position = assetLoc.toAudioPoint(relativeTo: params.location)
-        print("asset is at position \(player.position), gps: \(assetLoc)")
     }
     
     func updateParams(_ params: StreamParams) {
