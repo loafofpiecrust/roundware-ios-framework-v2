@@ -59,7 +59,9 @@ class Playlist {
         self.sortMethods = sortBy
 
         // Push audio attenuation to far away
-        audioMixer.distanceAttenuationParameters.referenceDistance = 100_000
+        audioMixer.distanceAttenuationParameters.distanceAttenuationModel = .linear
+        audioMixer.distanceAttenuationParameters.rolloffFactor = 0.00001
+        audioMixer.distanceAttenuationParameters.referenceDistance = 1
         audioMixer.distanceAttenuationParameters.maximumDistance = 200_000
 
         do {
@@ -408,10 +410,11 @@ extension CLLocation {
         let latMult = latDir == .plus ? -1.0 : 1.0
         let lngDir = (self.coordinate.longitude - other.coordinate.longitude).sign
         let lngMult = lngDir == .plus ? 1.0 : -1.0
+        let mult = 0.1
         return AVAudio3DPoint(
-            x: Float(lngDist * lngMult),
+            x: Float(lngDist * lngMult * mult),
             y: 0.0,
-            z: Float(latDist * latMult)
+            z: Float(latDist * latMult * mult)
         )
     }
 }
