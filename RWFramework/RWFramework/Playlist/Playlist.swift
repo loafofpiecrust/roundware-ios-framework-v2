@@ -67,7 +67,11 @@ class Playlist {
         do {
             // Setup audio engine & mixer
             audioEngine.attach(audioMixer)
-            audioEngine.connect(audioMixer, to: audioEngine.outputNode, format: nil)
+            audioEngine.connect(
+                audioMixer,
+                to: audioEngine.outputNode,
+                format: AVAudioFormat(standardFormatWithSampleRate: 96000, channels: 2)
+            )
             try audioEngine.start()
         } catch {
             print(error)
