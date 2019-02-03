@@ -444,7 +444,7 @@ private class FadingOut: TimedTrackState {
 
 /// Waiting for relevant assets to be available
 private class WaitingForAsset: TimedTrackState {
-    private static let updateInterval = 10.0 // seconds
+    private static let updateInterval = 5.0 // seconds
     
     private let track: AudioTrack
     

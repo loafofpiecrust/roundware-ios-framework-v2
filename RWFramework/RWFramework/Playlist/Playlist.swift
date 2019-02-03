@@ -195,9 +195,7 @@ extension Playlist {
             }.catch { err in }
         } else {
             self.tracks.forEach { it in
-                if it.currentAsset == nil {
-                    it.playNext(premature: false)
-                } else {
+                if it.currentAsset != nil {
                     it.updateParams(currentParams!)
                 }
             }
