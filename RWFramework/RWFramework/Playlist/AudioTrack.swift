@@ -6,9 +6,9 @@ import SceneKit
 import AVKit
 
 /// An AudioTrack has a set of parameters determining how its audio is played.
-/// Assets are provided by the Playlist, so they must match any geometric parameters.
+/// Assets are provided by the `Playlist`, so they must match any geometric parameters.
 /// There can be an arbitrary number of audio tracks playing at once
-/// When one needs an asset, it simply grabs the next available matching one from the Playlist.
+/// When one needs an `Asset`, it simply grabs the next available matching one from the `Playlist`.
 public class AudioTrack {
     let id: Int
     let volume: ClosedRange<Float>
@@ -27,25 +27,6 @@ public class AudioTrack {
     var state: TrackState? = nil
 
     let player = AVAudioPlayerNode()
-    // SceneKit version
-//    private var player: SCNAudioPlayer? = nil
-//    let node: SCNNode = SCNNode()
-
-    private var playerVolume: Float {
-        get {
-            return player.volume
-//            if let mixer = player.audioNode as? AVAudioMixerNode {
-//                return mixer.volume
-//            }
-//            return 0.0
-        }
-        set(value) {
-            player.volume = value
-//            if let mixer = player!.audioNode as? AVAudioMixerNode {
-//                mixer.volume = value
-//            }
-        }
-    }
 
     init(
         id: Int,
@@ -91,20 +72,18 @@ extension AudioTrack {
             )
         }
     }
-
-    private func setDynamicPan(at assetLoc: CLLocation, _ params: StreamParams) {
-        player.position = assetLoc.toAudioPoint()
-        print("asset is at position \(player.position)")
-    }
     
+    /// Update the track's audio spatialization for the given `params`.
     func updateParams(_ params: StreamParams) {
+        // Set the player position to spatialize the audio stream.
         if let assetLoc = currentAsset?.location {
-            setDynamicPan(at: assetLoc, params)
+            player.position = assetLoc.toAudioPoint()
+            print("asset is at position \(player.position)")
         }
     }
     
-    /// Plays the next optimal asset nearby.
-    /// @arg premature True if skipping the current asset, rather than fading at the end of it.
+    /// Plays the next optimal nearby asset.
+    /// - parameter premature: if skipping the current asset, rather than fading at the end of it.
     func playNext(premature: Bool = true) {
         // Can't fade out if playing the first asset
         if (premature) {
@@ -119,7 +98,9 @@ extension AudioTrack {
         }
     }
     
-    /// Downloads and starts playing the currently selected asset
+    /// Downloads and starts playing the currently selected asset.
+    /// - Parameter start: The position within the asset to start at
+    /// - Parameter for: The amount of seconds to play the asset for
     private func loadNextAsset(start: Double? = nil, for duration: Double? = nil) throws {
         // Download asset into memory
         print("downloading asset")
@@ -150,10 +131,12 @@ extension AudioTrack {
         let file = try AVAudioFile(forReading: url)
 
         if let start = start, let duration = duration {
+            // schedule part of the audio file
             let startFrame = Int64(start * file.processingFormat.sampleRate)
             let frameCount = UInt32(duration * file.processingFormat.sampleRate)
             player.scheduleSegment(file, startingFrame: startFrame, frameCount: frameCount, at: nil)
         } else {
+            // schedule the entire audio file
             player.scheduleFile(file, at: nil)
         }
 
@@ -162,25 +145,29 @@ extension AudioTrack {
         }
     }
     
+    /// Pause audio playback
     func pause() {
         state?.pause()
     }
     
+    /// Resume audio playback
     func resume() {
         state?.resume()
     }
     
+    /// Transitions this track to a particular `state`.
     func transition(to state: TrackState) {
         self.state?.finish()
         self.state = state
         state.start()
     }
     
+    /// Transition to a state of silence before looking for an asset to play.
     func holdSilence() {
         transition(to: DeadAir(track: self))
     }
     
-    /// - returns: if an asset has been chosen and started
+    /// Plays the next available asset, fading into it.
     func fadeInNextAsset() {
         if let next = self.playlist?.next(forTrack: self) {
             previousAsset = currentAsset
@@ -353,10 +340,12 @@ private class PlayingAsset: TimedTrackState {
     private let asset: Asset
     private let fadeOutDuration: Double
     
+    /**
+     - Parameter duration: Total duration of asset including fade out time
+     */
     init(
         track: AudioTrack,
         asset: Asset,
-        /// total duration of asset including fade out time
         duration: Double
     ) {
         self.track = track
