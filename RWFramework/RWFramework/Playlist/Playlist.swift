@@ -63,14 +63,15 @@ class Playlist {
         audioMixer.distanceAttenuationParameters.rolloffFactor = 0.00001
         audioMixer.distanceAttenuationParameters.referenceDistance = 1
         audioMixer.distanceAttenuationParameters.maximumDistance = 200_000
+        audioMixer.renderingAlgorithm = .soundField
 
         do {
             // Setup audio engine & mixer
             audioEngine.attach(audioMixer)
             audioEngine.connect(
                 audioMixer,
-                to: audioEngine.outputNode,
-                format: AVAudioFormat(standardFormatWithSampleRate: 96000, channels: 2)
+                to: audioEngine.mainMixerNode,
+                format: audioMixer.outputFormat(forBus: 0)
             )
             try audioEngine.start()
         } catch {
@@ -195,6 +196,7 @@ extension Playlist {
                 try self.tracks.forEach { it in
                     // TODO: Try to remove playlist dependency. Maybe pass into method?
                     it.playlist = self
+                    it.player.renderingAlgorithm = .soundField
                     self.audioEngine.attach(it.player)
                     self.audioEngine.connect(
                         it.player,
