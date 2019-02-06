@@ -98,6 +98,20 @@ struct AllTagsFilter: AssetFilter {
     }
 }
 
+struct TrackTagsFilter: AssetFilter {
+    func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
+        if (track.tags?.count == 0) {
+            return .normal
+        }
+        
+        let matches = asset.tags.contains { assetTag in
+            track.tags.contains(assetTag)
+        }
+        
+        return matches ? .normal : .discard
+    }
+}
+
 /**
  Plays an asset if the user is within range of it
  based on the current dynamic distance range.
