@@ -58,6 +58,7 @@ class Playlist {
         self.sortMethods = sortBy
         
         sceneRenderer.scene = self.scene
+        sceneRenderer.isPlaying = true
 
         // Setup audio engine & mixer
         let attenParams = sceneRenderer.audioEnvironmentNode.distanceAttenuationParameters
@@ -182,11 +183,12 @@ extension Playlist {
                 try self.tracks.forEach { it in
                     // TODO: Try to remove playlist dependency. Maybe pass into method?
                     it.playlist = self
+                    self.scene.rootNode.addChildNode(it.node)
                     self.sceneRenderer.audioEngine.attach(it.player)
                     self.sceneRenderer.audioEngine.connect(
                         it.player,
                         to: self.sceneRenderer.audioEnvironmentNode,
-                        format: AVAudioFormat(standardFormatWithSampleRate: 96000, channels: 1)
+                        format: AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1)
                     )
                     if !self.sceneRenderer.audioEngine.isRunning {
                         try self.sceneRenderer.audioEngine.start()
@@ -254,13 +256,14 @@ extension Playlist {
 
         if let heading = opts.heading {
             print("current heading angle: \(heading)")
-            self.sceneRenderer.audioEnvironmentNode.listenerAngularOrientation = AVAudio3DAngularOrientation(
-                yaw: Float(heading),
-                pitch: 0,
-                roll: 0
-            )
+//            self.sceneRenderer.audioEnvironmentNode.listenerAngularOrientation = AVAudio3DAngularOrientation(
+//                yaw: Float(heading),
+//                pitch: 0,
+//                roll: 0
+//            )
             self.sceneRenderer.pointOfView?.eulerAngles = SCNVector3(0, heading.degreesToRadians, 0)
         }
+        self.sceneRenderer.render(atTime: 0)
     }
     
     private func updateParams() {        
@@ -332,6 +335,7 @@ extension Playlist {
         RWFramework.sharedInstance.isPlaying = false
         for s in speakers { s.pause() }
         for t in tracks { t.pause() }
+        sceneRenderer.isPlaying = false
         if demoLooper != nil {
             demoStream?.pause()
         }
@@ -340,6 +344,7 @@ extension Playlist {
     func resume() {
         RWFramework.sharedInstance.isPlaying = true
         for s in speakers { s.resume() }
+        sceneRenderer.isPlaying = true
         for t in tracks { t.resume() }
         if demoLooper != nil {
             demoStream?.play()

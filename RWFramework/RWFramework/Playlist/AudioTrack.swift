@@ -35,19 +35,20 @@ public class AudioTrack {
 
     let player = AVAudioPlayerNode()
     // SceneKit version
+    var scenePlayer: SCNAudioPlayer? = nil
     let node: SCNNode = SCNNode()
 
     fileprivate var playerVolume: Float {
         get {
             return player.volume
-//            if let mixer = player?.audioNode as? AVAudioMixerNode {
+//            if let mixer = scenePlayer?.audioNode as? AVAudioMixerNode {
 //                return mixer.volume
 //            }
 //            return 0.0
         }
         set(value) {
             player.volume = value
-//            if let mixer = player!.audioNode as? AVAudioMixerNode {
+//            if let mixer = scenePlayer?.audioNode as? AVAudioMixerNode {
 //                mixer.volume = value
 //            }
         }
@@ -75,10 +76,6 @@ public class AudioTrack {
         self.tags = tags
         self.bannedDuration = bannedDuration
         self.startWithSilence = startWithSilence
-        
-//        if node.audioPlayers.isEmpty {
-            // node.addAudioPlayer(SCNAudioPlayer(avAudioNode: player))
-//        }
     }
 }
 
@@ -104,7 +101,7 @@ extension AudioTrack {
 
     private func setDynamicPan(at assetLoc: CLLocation, _ params: StreamParams) {
         node.position = assetLoc.toScenePoint(relativeTo: params.location)
-        player.position = assetLoc.toAudioPoint(relativeTo: params.location)
+//        player.position = assetLoc.toAudioPoint(relativeTo: params.location)
         print("asset is at position \(player.position)")
     }
     
@@ -136,7 +133,7 @@ extension AudioTrack {
         print("downloading asset")
         let remoteUrl = URL(string: currentAsset!.file)!
             .deletingPathExtension()
-            .appendingPathExtension("mp3")
+            .appendingPathExtension("wav")
         
         let data = try Data(contentsOf: remoteUrl)
         print("asset downloaded as \(remoteUrl.lastPathComponent)")
@@ -148,7 +145,7 @@ extension AudioTrack {
         if let prev = previousAsset {
             let fileName = URL(string: prev.file)!
                 .deletingPathExtension()
-                .appendingPathExtension("mp3")
+                .appendingPathExtension("wav")
                 .lastPathComponent
             
             let prevAssetUrl = documentsDir.appendingPathComponent(fileName)
@@ -159,6 +156,8 @@ extension AudioTrack {
         try data.write(to: url, options: .atomic)
 
         let file = try AVAudioFile(forReading: url)
+        
+        print("audio file: \(file.fileFormat.sampleRate) Hz, \(file.fileFormat.channelCount) channels")
 
         if let start = start, let duration = duration {
             let startFrame = Int64(start * file.processingFormat.sampleRate)
@@ -171,6 +170,24 @@ extension AudioTrack {
         if !player.isPlaying {
             player.play()
         }
+        
+        if scenePlayer == nil {
+            scenePlayer = SCNAudioPlayer(avAudioNode: player)
+        }
+        
+        node.removeAllAudioPlayers()
+        node.addAudioPlayer(scenePlayer!)
+        
+//        let source = SCNAudioSource(url: url)!
+//        source.isPositional = true
+//        source.shouldStream = false
+//        source.loops = false
+//        source.load()
+//
+//        scenePlayer = SCNAudioPlayer(source: source)
+//
+//        node.removeAllAudioPlayers()
+//        node.addAudioPlayer(scenePlayer!)
     }
     
     func pause() {
