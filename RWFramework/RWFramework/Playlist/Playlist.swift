@@ -50,18 +50,23 @@ class Playlist {
 
     private(set) var project: Project!
 
-//    let scene = SCNScene()
-    let audioEngine = AVAudioEngine()
-    let audioMixer = AVAudioEnvironmentNode()
+    let scene = SCNScene()
+    let sceneRenderer = SCNRenderer(context: nil, options: nil)
 
     init(filters: [AssetFilter], sortBy: [SortMethod]) {
         self.filters = AllAssetFilters(filters)
         self.sortMethods = sortBy
+        
+        sceneRenderer.scene = self.scene
 
         // Setup audio engine & mixer
-        audioEngine.attach(audioMixer)
-        audioEngine.connect(audioMixer, to: audioEngine.outputNode, format: nil)
-        try! audioEngine.start()
+        let attenParams = sceneRenderer.audioEnvironmentNode.distanceAttenuationParameters
+        attenParams.referenceDistance = 1
+        attenParams.maximumDistance = 200_000
+        attenParams.distanceAttenuationModel = .linear
+        attenParams.rolloffFactor = 0.000001
+        
+        sceneRenderer.pointOfView = SCNNode()
     }
 }
 
@@ -177,14 +182,14 @@ extension Playlist {
                 try self.tracks.forEach { it in
                     // TODO: Try to remove playlist dependency. Maybe pass into method?
                     it.playlist = self
-                    self.audioEngine.attach(it.player)
-                    self.audioEngine.connect(
+                    self.sceneRenderer.audioEngine.attach(it.player)
+                    self.sceneRenderer.audioEngine.connect(
                         it.player,
-                        to: self.audioMixer,
+                        to: self.sceneRenderer.audioEnvironmentNode,
                         format: AVAudioFormat(standardFormatWithSampleRate: 96000, channels: 1)
                     )
-                    if !self.audioEngine.isRunning {
-                        try self.audioEngine.start()
+                    if !self.sceneRenderer.audioEngine.isRunning {
+                        try self.sceneRenderer.audioEngine.start()
                     }
                     if it.startWithSilence {
                         it.holdSilence()
@@ -239,7 +244,7 @@ extension Playlist {
     
     /// Framework should call this when stream parameters are updated.
     func updateParams(_ opts: StreamParams) {
-        if project == nil {
+        if self.project == nil {
             return
         }
 
@@ -249,16 +254,13 @@ extension Playlist {
 
         if let heading = opts.heading {
             print("current heading angle: \(heading)")
-            self.audioMixer.listenerAngularOrientation = AVAudio3DAngularOrientation(
+            self.sceneRenderer.audioEnvironmentNode.listenerAngularOrientation = AVAudio3DAngularOrientation(
                 yaw: Float(heading),
                 pitch: 0,
                 roll: 0
             )
+            self.sceneRenderer.pointOfView?.eulerAngles = SCNVector3(0, heading.degreesToRadians, 0)
         }
-        let pos = opts.location.toAudioPoint()
-        self.audioMixer.listenerPosition = pos
-        self.audioMixer.position = pos
-        print("current listener position: \(pos)")
     }
     
     private func updateParams() {        
@@ -382,6 +384,38 @@ extension CLLocation {
             x: Float(coord.longitude * mult),
             y: 0.0,
             z: -Float(coord.latitude * mult)
+        )
+    }
+    
+    func toScenePoint(relativeTo other: CLLocation) -> SCNVector3 {
+        let latCoord = CLLocation(latitude: self.coordinate.latitude, longitude: other.coordinate.longitude)
+        let lngCoord = CLLocation(latitude: other.coordinate.latitude, longitude: self.coordinate.longitude)
+        let latDist = latCoord.distance(from: other)
+        let lngDist = lngCoord.distance(from: other)
+        let latDir = (self.coordinate.latitude - other.coordinate.latitude).sign
+        let latMult = latDir == .plus ? -1.0 : 1.0
+        let lngDir = (self.coordinate.longitude - other.coordinate.longitude).sign
+        let lngMult = lngDir == .plus ? 1.0 : -1.0
+        return SCNVector3(
+            x: Float(lngDist * lngMult),
+            y: 0.0,
+            z: Float(latDist * latMult)
+        )
+    }
+    
+    func toAudioPoint(relativeTo other: CLLocation) -> AVAudio3DPoint {
+        let latCoord = CLLocation(latitude: self.coordinate.latitude, longitude: other.coordinate.longitude)
+        let lngCoord = CLLocation(latitude: other.coordinate.latitude, longitude: self.coordinate.longitude)
+        let latDist = latCoord.distance(from: other)
+        let lngDist = lngCoord.distance(from: other)
+        let latDir = (self.coordinate.latitude - other.coordinate.latitude).sign
+        let latMult = latDir == .plus ? -1.0 : 1.0
+        let lngDir = (self.coordinate.longitude - other.coordinate.longitude).sign
+        let lngMult = lngDir == .plus ? 1.0 : -1.0
+        return AVAudio3DPoint(
+            x: Float(lngDist * lngMult),
+            y: 0.0,
+            z: Float(latDist * latMult)
         )
     }
 }

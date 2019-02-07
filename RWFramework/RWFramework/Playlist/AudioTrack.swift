@@ -35,13 +35,12 @@ public class AudioTrack {
 
     let player = AVAudioPlayerNode()
     // SceneKit version
-//    private var player: SCNAudioPlayer? = nil
-//    let node: SCNNode = SCNNode()
+    let node: SCNNode = SCNNode()
 
-    private var playerVolume: Float {
+    fileprivate var playerVolume: Float {
         get {
             return player.volume
-//            if let mixer = player.audioNode as? AVAudioMixerNode {
+//            if let mixer = player?.audioNode as? AVAudioMixerNode {
 //                return mixer.volume
 //            }
 //            return 0.0
@@ -76,6 +75,10 @@ public class AudioTrack {
         self.tags = tags
         self.bannedDuration = bannedDuration
         self.startWithSilence = startWithSilence
+        
+//        if node.audioPlayers.isEmpty {
+            // node.addAudioPlayer(SCNAudioPlayer(avAudioNode: player))
+//        }
     }
 }
 
@@ -100,7 +103,8 @@ extension AudioTrack {
     }
 
     private func setDynamicPan(at assetLoc: CLLocation, _ params: StreamParams) {
-        player.position = assetLoc.toAudioPoint()
+        node.position = assetLoc.toScenePoint(relativeTo: params.location)
+        player.position = assetLoc.toAudioPoint(relativeTo: params.location)
         print("asset is at position \(player.position)")
     }
     
@@ -317,30 +321,34 @@ private class FadingIn: TimedTrackState {
             withTimeInterval: FadingIn.updateInterval,
             repeats: true
         ) { _ in
-            if self.track.player.volume < self.targetVolume {
+            if self.track.playerVolume < self.targetVolume {
                 let toAdd = FadingIn.updateInterval / self.timeLeft
-                self.track.player.volume += Float(toAdd)
+                self.track.playerVolume += Float(toAdd)
             } else {
                 print("asset at full volume \(self.targetVolume)")
-                self.track.player.volume = self.targetVolume
+                self.track.playerVolume = self.targetVolume
                 self.goToNextState()
             }
         }
     }
     
     override func start() {
-        track.player.volume = 0
+        track.playerVolume = 0
         super.start()
     }
     
     override func resume() {
         super.resume()
+//        if let p = track.player {
+//            track.node.addAudioPlayer(p)
+//        }
         track.player.play()
         print("fading in for \(timeLeft)s, to volume \(targetVolume)")
     }
     
     override func pause() {
         super.pause()
+//        track.node.removeAllAudioPlayers()
         track.player.pause()
     }
     
@@ -376,11 +384,15 @@ private class PlayingAsset: TimedTrackState {
     
     override func pause() {
         super.pause()
+//        track.node.removeAllAudioPlayers()
         track.player.pause()
     }
     
     override func resume() {
         super.resume()
+//        if let p = track.player {
+//            track.node.addAudioPlayer(p)
+//        }
         track.player.play()
         print("playing for another \(timeLeft)s")
     }
@@ -416,11 +428,11 @@ private class FadingOut: TimedTrackState {
             withTimeInterval: FadingOut.updateInterval,
             repeats: true
         ) { _ in
-            if self.track.player.volume > 0 {
+            if self.track.playerVolume > 0 {
                 let toAdd = FadingOut.updateInterval / self.timeLeft
-                self.track.player.volume -= Float(toAdd)
+                self.track.playerVolume -= Float(toAdd)
             } else {
-                self.track.player.volume = 0
+                self.track.playerVolume = 0
                 self.goToNextState()
             }
         }
@@ -429,11 +441,15 @@ private class FadingOut: TimedTrackState {
     override func resume() {
         super.resume()
         track.player.play()
+//        if let p = track.player {
+//            track.node.addAudioPlayer(p)
+//        }
         print("fading out for \(timeLeft)s")
     }
     
     override func pause() {
         super.pause()
+//        track.node.removeAllAudioPlayers()
         track.player.pause()
     }
     
