@@ -57,6 +57,19 @@ class Playlist {
     init(filters: [AssetFilter], sortBy: [SortMethod]) {
         self.filters = AllAssetFilters(filters)
         self.sortMethods = sortBy
+        
+        // Restart the audio engine upon changing outputs
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name.AVAudioEngineConfigurationChange,
+            object: audioEngine,
+            queue: OperationQueue.main
+        ) { _ in
+            print("audio engine config change")
+            if !self.audioEngine.isRunning {
+                self.audioEngine.disconnectNodeOutput(self.audioMixer)
+                self.setupAudioConnection()
+            }
+        }
 
         // Push audio attenuation to far away
         audioMixer.distanceAttenuationParameters.distanceAttenuationModel = .linear
@@ -65,13 +78,17 @@ class Playlist {
         audioMixer.distanceAttenuationParameters.maximumDistance = 200_000
         audioMixer.renderingAlgorithm = .soundField
 
+        // Setup audio engine & mixer
+        audioEngine.attach(audioMixer)
+        setupAudioConnection()
+    }
+    
+    private func setupAudioConnection() {
         do {
-            // Setup audio engine & mixer
-            audioEngine.attach(audioMixer)
             audioEngine.connect(
                 audioMixer,
                 to: audioEngine.mainMixerNode,
-                format: audioMixer.outputFormat(forBus: 0)
+                format: nil
             )
             try audioEngine.start()
         } catch {
