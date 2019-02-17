@@ -186,20 +186,11 @@ extension Playlist {
                     if !self.audioEngine.isRunning {
                         try self.audioEngine.start()
                     }
-                    if it.startWithSilence {
-                        it.holdSilence()
-                    } else {
-                        it.playNext(premature: false)
-                    }
                 }
             }.catch { err in }
         } else {
             self.tracks.forEach { it in
-                if it.currentAsset == nil {
-                    it.playNext(premature: false)
-                } else {
-                    it.updateParams(currentParams!)
-                }
+                it.updateParams(currentParams!)
             }
         }
     }

@@ -100,7 +100,6 @@ extension Speaker {
             // definitely want to create the player if it needs volume
             if self.player == nil {
                 player = AVPlayer(url: URL(string: url)!)
-                player!.play()
 
                 looper = looper ?? NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player!.currentItem, queue: .main) { [weak self] _ in
                     self?.player?.seek(to: CMTime.zero)

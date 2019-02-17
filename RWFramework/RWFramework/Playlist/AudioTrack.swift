@@ -166,6 +166,9 @@ extension AudioTrack {
 
         if !player.isPlaying {
             player.play()
+            if let params = playlist?.currentParams {
+                updateParams(params)
+            }
         }
     }
     
@@ -174,7 +177,13 @@ extension AudioTrack {
     }
     
     func resume() {
-        state?.resume()
+        if let state = state {
+            state.resume()
+        } else if self.startWithSilence {
+            holdSilence()
+        } else {
+            fadeInNextAsset()
+        }
     }
     
     func transition(to state: TrackState) {
