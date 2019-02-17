@@ -60,7 +60,7 @@ class Playlist {
         
         // Restart the audio engine upon changing outputs
         NotificationCenter.default.addObserver(
-            forName: NSNotification.Name.AVAudioEngineConfigurationChange,
+            forName: .AVAudioEngineConfigurationChange,
             object: audioEngine,
             queue: OperationQueue.main
         ) { _ in
