@@ -111,7 +111,7 @@ extension Playlist {
     
     /// Prepares all the speakers for this project.
     @discardableResult
-    private func updateSpeakers() -> Promise<[Speaker]> {
+    private func initSpeakers() -> Promise<[Speaker]> {
         return RWFramework.sharedInstance.apiGetSpeakers([
             "project_id": String(project.id),
             "activeyn": "true"
@@ -201,45 +201,44 @@ extension Playlist {
         return next
     }
     
+    private func updateTrackParams() {
+        if let tracks = self.tracks, let params = self.currentParams {
+            for track in tracks {
+                track.updateParams(params)
+            }
+        }
+    }
+    
     /// Grab the list of `AudioTrack`s for the current project.
-    private func updateTracks() {
-        if let tracks = self.tracks {
-            if let params = self.currentParams {
-                for track in tracks {
-                    track.updateParams(params)
+    private func initTracks() {
+        let rw = RWFramework.sharedInstance
+        
+        rw.apiGetAudioTracks([
+            "project_id": String(project.id)
+        ]).then { data in
+            print("assets: using " + data.count.description + " tracks")
+            for it in data {
+                // TODO: Try to remove playlist dependency. Maybe pass into method?
+                it.playlist = self
+                it.player.renderingAlgorithm = .soundField
+                self.audioEngine.attach(it.player)
+                self.audioEngine.connect(
+                    it.player,
+                    to: self.audioMixer,
+                    format: AVAudioFormat(standardFormatWithSampleRate: 96000, channels: 1)
+                )
+                if it.startWithSilence {
+                    it.holdSilence()
+                } else {
+                    it.playNext(premature: false)
                 }
             }
-        } else {
-            let rw = RWFramework.sharedInstance
-            self.tracks = []
-            
-            rw.apiGetAudioTracks([
-                "project_id": String(project.id)
-            ]).then { data in
-                print("assets: using " + data.count.description + " tracks")
-                for it in data {
-                    // TODO: Try to remove playlist dependency. Maybe pass into method?
-                    it.playlist = self
-                    it.player.renderingAlgorithm = .soundField
-                    self.audioEngine.attach(it.player)
-                    self.audioEngine.connect(
-                        it.player,
-                        to: self.audioMixer,
-                        format: AVAudioFormat(standardFormatWithSampleRate: 96000, channels: 1)
-                    )
-                    if !self.audioEngine.isRunning {
-                        try self.audioEngine.start()
-                    }
-                    if it.startWithSilence {
-                        it.holdSilence()
-                    } else {
-                        it.playNext(premature: false)
-                    }
-                }
-                self.tracks = data
-            }.catch { err in
-                print(err)
+            if !self.audioEngine.isRunning {
+                try self.audioEngine.start()
             }
+            self.tracks = data
+        }.catch { err in
+            print(err)
         }
     }
     
@@ -306,7 +305,7 @@ extension Playlist {
         // TODO: Use a filter to clear data for assets we've moved away from.
         
         // Tell our tracks to play any new assets.
-        self.updateTracks()
+        self.updateTrackParams()
     }
     
     /// Periodically check for newly published assets
@@ -350,7 +349,10 @@ extension Playlist {
         startTime = Date()
         
         // Start playing background music from speakers.
-        updateSpeakers()
+        initSpeakers()
+        
+        // Retrieve the list of tracks
+        initTracks()
         
         updateTimer = Timer(
             timeInterval: project.asset_refresh_interval,
