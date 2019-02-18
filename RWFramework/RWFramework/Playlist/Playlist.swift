@@ -307,6 +307,8 @@ extension Playlist {
     }
     
     func start() {
+        RWFramework.sharedInstance.isPlaying = false
+        
         // Starts a session and retrieves project-wide config.
         RWFramework.sharedInstance.apiStartForClientMixing().then { project in
             self.project = project
@@ -347,25 +349,27 @@ extension Playlist {
         )
         // Initial grab of assets and speakers.
         updateTimer?.fire()
-
-        RWFramework.sharedInstance.isPlaying = true
     }
     
     func pause() {
-        RWFramework.sharedInstance.isPlaying = false
-        for s in speakers { s.pause() }
-        for t in tracks { t.pause() }
-        if demoLooper != nil {
-            demoStream?.pause()
+        if RWFramework.sharedInstance.isPlaying {
+            RWFramework.sharedInstance.isPlaying = false
+            for s in speakers { s.pause() }
+            for t in tracks { t.pause() }
+            if demoLooper != nil {
+                demoStream?.pause()
+            }
         }
     }
     
     func resume() {
-        RWFramework.sharedInstance.isPlaying = true
-        for s in speakers { s.resume() }
-        for t in tracks { t.resume() }
-        if demoLooper != nil {
-            demoStream?.play()
+        if !RWFramework.sharedInstance.isPlaying {
+            RWFramework.sharedInstance.isPlaying = true
+            for s in speakers { s.resume() }
+            for t in tracks { t.resume() }
+            if demoLooper != nil {
+                demoStream?.play()
+            }
         }
     }
     
