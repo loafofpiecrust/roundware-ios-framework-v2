@@ -95,6 +95,10 @@ extension Speaker {
                     self?.player?.play()
                 }
             }
+            // make sure this speaker is playing if it needs to be audible
+            if player!.rate == 0.0 && RWFramework.sharedInstance.isPlaying {
+                player!.play()
+            }
         }
         
         fadeTimer?.invalidate()
