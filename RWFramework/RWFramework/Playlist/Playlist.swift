@@ -272,13 +272,8 @@ extension Playlist {
     
     /// Framework should call this when stream parameters are updated.
     func updateParams(_ opts: StreamParams) {
-        if project == nil {
-            return
-        }
-
         self.currentParams = opts
-        self.updateParams()
-
+        
         if let heading = opts.heading {
             self.audioMixer.listenerAngularOrientation = AVAudio3DAngularOrientation(
                 yaw: Float(heading),
@@ -287,9 +282,9 @@ extension Playlist {
             )
         }
         
-        let pos = AVAudio3DPoint(x: 0, y: 0, z: 0)
-        self.audioMixer.listenerPosition = pos
-        self.audioMixer.position = pos
+        if project != nil {
+            self.updateParams()
+        }
     }
     
     private func updateParams() {
