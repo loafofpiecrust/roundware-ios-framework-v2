@@ -42,8 +42,8 @@ class Playlist {
     private(set) var userAssetData = [Int: UserAssetData]()
 
     // audio tracks, background and foreground
-    private(set) var speakers = [Speaker]()
-    private(set) var tracks = [AudioTrack]()
+    private(set) var speakers: [Speaker]? = nil
+    private(set) var tracks: [AudioTrack]? = nil
 
     private var demoStream: AVPlayer? = nil
     private var demoLooper: Any? = nil
@@ -127,9 +127,9 @@ extension Playlist {
      If the distance to the nearest speaker > outOfRangeDistance, then play demo stream.
     */
     private func updateSpeakerVolumes() {
-        if let params = self.currentParams {
+        if let params = self.currentParams, let speakers = self.speakers {
             var playDemo = true
-            for speaker in self.speakers {
+            for speaker in speakers {
                 let vol = speaker.updateVolume(at: params.location)
                 // Only consider playing the demo stream if all speakers are silent.
                 if vol > 0.001 {
@@ -147,11 +147,12 @@ extension Playlist {
     }
 
     private func playDemoStream() {
-        guard let params = self.currentParams
+        guard let params = self.currentParams,
+              let speakers = self.speakers
             else { return }
 
         // distance to nearest point on a speaker shape
-        let distToSpeaker = self.speakers.lazy.map {
+        let distToSpeaker = speakers.lazy.map {
             $0.distance(to: params.location)
         }.min() ?? 0
 
@@ -182,7 +183,7 @@ extension Playlist {
     /// Picks the next-up asset to play on the given track.
     /// Applies all the playlist-level and track-level filters to make the decision.
     func next(forTrack track: AudioTrack) -> Asset? {
-        let filteredAssets = self.allAssets.lazy.map { asset in 
+        let filteredAssets = self.allAssets.lazy.map { asset in
             (asset, self.filters.keep(asset, playlist: self, track: track))
         }.filter { (asset, rank) in
             rank != .discard
@@ -202,15 +203,21 @@ extension Playlist {
     
     /// Grab the list of `AudioTrack`s for the current project.
     private func updateTracks() {
-        if (self.tracks.isEmpty) {
+        if let tracks = self.tracks {
+            if let params = self.currentParams {
+                for track in tracks {
+                    track.updateParams(params)
+                }
+            }
+        } else {
             let rw = RWFramework.sharedInstance
+            self.tracks = []
             
             rw.apiGetAudioTracks([
                 "project_id": String(project.id)
             ]).then { data in
                 print("assets: using " + data.count.description + " tracks")
-                self.tracks = data
-                try self.tracks.forEach { it in
+                for it in data {
                     // TODO: Try to remove playlist dependency. Maybe pass into method?
                     it.playlist = self
                     it.player.renderingAlgorithm = .soundField
@@ -229,16 +236,9 @@ extension Playlist {
                         it.playNext(premature: false)
                     }
                 }
+                self.tracks = data
             }.catch { err in
                 print(err)
-            }
-        } else {
-            self.tracks.forEach { it in
-                if it.currentAsset == nil {
-                    it.playNext(premature: false)
-                } else if let params = currentParams {
-                    it.updateParams(params)
-                }
             }
         }
     }
@@ -272,7 +272,7 @@ extension Playlist {
                     sortMethod.sortRanking(for: a, in: self) < sortMethod.sortRanking(for: b, in: self)
                 })
             }
-            print("\(self.allAssets.count) total assets")
+            print("\(data.count) total assets")
         }.catch { err in
             print(err)
             self.lastUpdate = Date()
@@ -366,27 +366,31 @@ extension Playlist {
     }
     
     func pause() {
-        RWFramework.sharedInstance.isPlaying = false
-        for s in speakers { s.pause() }
-        for t in tracks { t.pause() }
-        if demoLooper != nil {
-            demoStream?.pause()
+        if RWFramework.sharedInstance.isPlaying {
+            RWFramework.sharedInstance.isPlaying = false
+            speakers?.forEach { $0.pause() }
+            tracks?.forEach { $0.pause() }
+            if demoLooper != nil {
+                demoStream?.pause()
+            }
         }
     }
     
     func resume() {
-        RWFramework.sharedInstance.isPlaying = true
-        for s in speakers { s.resume() }
-        for t in tracks { t.resume() }
-        if demoLooper != nil {
-            demoStream?.play()
+        if !RWFramework.sharedInstance.isPlaying {
+            RWFramework.sharedInstance.isPlaying = true
+            speakers?.forEach { $0.resume() }
+            tracks?.forEach { $0.resume() }
+            if demoLooper != nil {
+                demoStream?.play()
+            }
         }
     }
     
     func skip() {
         // Fade out the currently playing assets on all tracks.
-        for t in tracks {
-            t.playNext(premature: true)
+        tracks?.forEach {
+            $0.playNext(premature: true)
         }
     }
 }
