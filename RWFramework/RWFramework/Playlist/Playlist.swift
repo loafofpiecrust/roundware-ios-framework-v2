@@ -227,11 +227,7 @@ extension Playlist {
                     to: self.audioMixer,
                     format: AVAudioFormat(standardFormatWithSampleRate: 96000, channels: 1)
                 )
-                if it.startWithSilence {
-                    it.holdSilence()
-                } else {
-                    it.playNext(premature: false)
-                }
+                
             }
             if !self.audioEngine.isRunning {
                 try self.audioEngine.start()
@@ -280,13 +276,8 @@ extension Playlist {
     
     /// Framework should call this when stream parameters are updated.
     func updateParams(_ opts: StreamParams) {
-        if project == nil {
-            return
-        }
-
         self.currentParams = opts
-        self.updateParams()
-
+        
         if let heading = opts.heading {
             self.audioMixer.listenerAngularOrientation = AVAudio3DAngularOrientation(
                 yaw: Float(heading),
@@ -295,9 +286,9 @@ extension Playlist {
             )
         }
         
-        let pos = AVAudio3DPoint(x: 0, y: 0, z: 0)
-        self.audioMixer.listenerPosition = pos
-        self.audioMixer.position = pos
+        if project != nil {
+            self.updateParams()
+        }
     }
     
     private func updateParams() {
@@ -320,6 +311,8 @@ extension Playlist {
     }
     
     func start() {
+        RWFramework.sharedInstance.isPlaying = false
+        
         // Starts a session and retrieves project-wide config.
         RWFramework.sharedInstance.apiStartForClientMixing().then { project in
             self.project = project
@@ -363,8 +356,6 @@ extension Playlist {
         )
         // Initial grab of assets and speakers.
         updateTimer?.fire()
-
-        RWFramework.sharedInstance.isPlaying = true
     }
     
     func pause() {
