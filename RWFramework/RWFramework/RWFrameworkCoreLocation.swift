@@ -15,9 +15,15 @@ extension RWFramework: CLLocationManagerDelegate {
     public func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         if status == CLAuthorizationStatus.authorizedAlways || status == CLAuthorizationStatus.authorizedWhenInUse {
             let geo_listen_enabled = RWFrameworkConfig.getConfigValueAsBool("geo_listen_enabled")
-            if (geo_listen_enabled) {
+            if geo_listen_enabled {
                 locationManager.startUpdatingLocation()
                 updateStreamParams(range: nil, headingAngle: nil, angularWidth: nil)
+            }
+            
+            // Only automatically pan by device heading if enabled in project config
+            let pan_by_heading = RWFrameworkConfig.getConfigValueAsBool("pan_by_heading")
+            if pan_by_heading {
+                locationManager.startUpdatingHeading()
             }
         }
 
@@ -26,9 +32,9 @@ extension RWFramework: CLLocationManagerDelegate {
     
     /// Update parameters to future stream requests
     public func updateStreamParams(
-        range: ClosedRange<Double>?,
-        headingAngle: Double?,
-        angularWidth: Double?
+        range: ClosedRange<Double>? = nil,
+        headingAngle: Double? = nil,
+        angularWidth: Double? = nil
     ) {
         if let r = range { 
             streamOptions["listener_range_min"] = r.lowerBound
@@ -58,25 +64,18 @@ extension RWFramework: CLLocationManagerDelegate {
         let listen_enabled = RWFrameworkConfig.getConfigValueAsBool("listen_enabled")
         let geo_listen_enabled = RWFrameworkConfig.getConfigValueAsBool("geo_listen_enabled")
         if (listen_enabled && geo_listen_enabled) {
-//             if (!requestStreamInProgress && !requestStreamSucceeded) {
-// //                playlist.start()
-//                 requestStreamSucceeded = true
-//             } else {
-                // if using range/directional listening, current param values should be inserted here
-                // such that automatic location updates do not turn off range/directional listening by omitting required params
-                playlist.updateParams(StreamParams(
-                    location: locations[0],
-                    minDist: streamOptions["listener_range_min"] as? Double,
-                    maxDist: streamOptions["listener_range_max"] as? Double,
-                    heading: streamOptions["listener_heading"] as? Double,
-                    angularWidth: streamOptions["listener_width"] as? Double
-                ))
-            // }
+            // Send parameter update with the newly recorded location
+            updateStreamParams()
         }
 
         // TODO: Set theme
 
         rwLocationManager(manager, didUpdateLocations: locations)
+    }
+    
+    public func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        // Update the playlist with this new device heading
+        updateStreamParams(headingAngle: newHeading.trueHeading)
     }
 
     /// Called by the CLLocationManager when location update has failed
