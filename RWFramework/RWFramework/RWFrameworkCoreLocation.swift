@@ -10,7 +10,6 @@ import Foundation
 import CoreLocation
 
 extension RWFramework: CLLocationManagerDelegate {
-
     /// This is called at app startup and also after permission has changed
     public func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         if status == CLAuthorizationStatus.authorizedAlways || status == CLAuthorizationStatus.authorizedWhenInUse {
@@ -72,8 +71,18 @@ extension RWFramework: CLLocationManagerDelegate {
     }
     
     public func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        var headingAngle = newHeading.trueHeading
+        
+        // Use 'course' if the device is pitched up or down far enough.
+        if let attitude = motionManager.deviceMotion?.attitude {
+            let limit = 70.0.degreesToRadians
+            if attitude.pitch > limit || attitude.pitch < -limit {
+                headingAngle = lastRecordedLocation.course
+            }
+        }
+        
         // Update the playlist with this new device heading
-        updateStreamParams(headingAngle: newHeading.trueHeading)
+        updateStreamParams(headingAngle: headingAngle)
     }
 
     /// Called by the CLLocationManager when location update has failed
