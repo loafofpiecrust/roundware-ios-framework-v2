@@ -450,11 +450,9 @@ extension RWFramework {
         let session_id = RWFrameworkConfig.getConfigValueAsNumber("session_id", group: RWFrameworkConfig.ConfigGroup.client)
 
         return httpPatchEnvelopesId(media, session_id: session_id).then { data -> Void in
-            success()
             self.rwPatchEnvelopesIdSuccess(data)
             self.rwPatchEnvelopesIdSuccess(data)
         }.catch { error in
-            failure(error)
             self.rwPatchEnvelopesIdFailure(error)
             self.apiProcessError(nil, error: error, caller: "apiPatchEnvelopesId")
         }
@@ -493,7 +491,7 @@ extension RWFramework {
     }
 
     /// MARK: GET assets PUBLIC
-    func apiGetAssets(_ dict: [String:String]) -> Promise<[Asset]> {
+    public func apiGetAssets(_ dict: [String:String]) -> Promise<[Asset]> {
         return httpGetAssets(dict).then { data -> [Asset] in
             self.rwGetAssetsSuccess(data)
             return try Asset.from(data: data)
@@ -524,23 +522,16 @@ extension RWFramework {
     
 // MARK: PATCH assets id PUBLIC
     
-    public func apiPatchAssetsId(_ asset_id: String, postData: [String: Any] = [:], success:@escaping (_ data: Data?) -> Void, failure:@escaping (_ error: NSError) -> Void) {
+    public func apiPatchAssetsId(_ asset_id: String, postData: [String: Any] = [:]) -> Promise<Data> {
         
-        httpPatchAssetsId(asset_id, postData: postData) { (data, error) -> Void in
-            if (data != nil) && (error == nil) {
-                success(data)
+        return httpPatchAssetsId(asset_id, postData: postData).then { data -> Data in
                 self.rwPatchAssetsIdSuccess(data)
-            } else if (error != nil) {
-                failure(error!)
+                return data
+            }.catch { error in
                 self.rwPatchAssetsIdFailure(error)
-                self.apiProcessError(data, error: error!, caller: "apiPatchAssetsId")
+                self.apiProcessError(nil, error: error, caller: "apiPatchAssetsId")
             }
-        }
     }
-    
-    
-    
-
 
     /// MARK: POST assets id votes
     public func apiPostAssetsIdVotes(_ asset_id: String, vote_type: String, value: NSNumber = 0) -> Promise<Data> {

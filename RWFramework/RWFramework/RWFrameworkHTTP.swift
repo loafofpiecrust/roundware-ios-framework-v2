@@ -148,8 +148,11 @@ extension RWFramework: URLSessionDelegate, URLSessionTaskDelegate, URLSessionDat
     func httpPatchEnvelopesId(_ media: Media, session_id: NSNumber) -> Promise<Data> {
         let serverMediaType = mapMediaTypeToServerMediaType(media.mediaType)
         let postData = ["session_id": session_id, "media_type": serverMediaType.rawValue, "latitude": media.latitude.stringValue, "longitude": media.longitude.stringValue, "tag_ids": media.tagIDs, "description": media.desc] as [String : Any]
-        let url = RWFrameworkURLFactory.patchEnvelopesIdURL(media.envelopeID.stringValue)
-        return patchFileAndData(to: url, filePath: media.string, postData: postData)
+        return patchFileAndData(
+            to: RWFrameworkURLFactory.patchEnvelopesIdURL(media.envelopeID.stringValue),
+            filePath: media.string,
+            postData: postData
+        )
     }
     
     func httpGetAudioTracks(_ dict: [String:String]) -> Promise<Data> {
@@ -160,7 +163,7 @@ extension RWFramework: URLSessionDelegate, URLSessionTaskDelegate, URLSessionDat
         return getData(from: RWFrameworkURLFactory.getTimedAssetsURL(dict))
     }
 
-    func httpGetAssets(_ dict: [String:String]) -> Promise<Data> {
+    public func httpGetAssets(_ dict: [String:String]) -> Promise<Data> {
         return getData(from: RWFrameworkURLFactory.getAssetsURL(dict))
     }
 
@@ -168,13 +171,11 @@ extension RWFramework: URLSessionDelegate, URLSessionTaskDelegate, URLSessionDat
         return getData(from: RWFrameworkURLFactory.getAssetsIdURL(asset_id))
     }
     
-    func httpPatchAssetsId(_ asset_id: String, postData: [String: Any] = [:], completion:@escaping (_ data: Data?, _ error: NSError?) -> Void) {
-        if let url = URL(string: RWFrameworkURLFactory.patchAssetsIdURL(asset_id)) {
-            patchDataToURL(url, postData: postData, completion: completion)
-        } else {
-            let error = NSError(domain:self.reverse_domain, code:NSURLErrorBadURL, userInfo:[NSLocalizedDescriptionKey : "httpPatchAssetsId unable to be created."])
-            completion(nil, error)
-        }
+    func httpPatchAssetsId(_ asset_id: String, postData: [String: Any] = [:]) -> Promise<Data> {
+        return patchData(
+            to: RWFrameworkURLFactory.patchAssetsIdURL(asset_id),
+            postData: postData
+        )
     }
 
     func httpPostAssetsIdVotes(_ asset_id: String, session_id: NSNumber, vote_type: String, value: NSNumber = 0) -> Promise<Data> {
