@@ -14,6 +14,7 @@ import SceneKit
 
 struct UserAssetData {
     let lastListen: Date
+    let playCount: Int
 }
 
 /// TODO: Make each of these optional and provide a default constructor
@@ -42,8 +43,8 @@ class Playlist {
     private(set) var userAssetData = [Int: UserAssetData]()
 
     // audio tracks, background and foreground
-    private(set) var speakers = [Speaker]()
-    private(set) var tracks = [AudioTrack]()
+    private(set) var speakers: [Speaker]? = nil
+    private(set) var tracks: [AudioTrack]? = nil
 
     private var demoStream: AVPlayer? = nil
     private var demoLooper: Any? = nil
@@ -111,7 +112,7 @@ extension Playlist {
     
     /// Prepares all the speakers for this project.
     @discardableResult
-    private func updateSpeakers() -> Promise<[Speaker]> {
+    private func initSpeakers() -> Promise<[Speaker]> {
         return RWFramework.sharedInstance.apiGetSpeakers([
             "project_id": String(project.id),
             "activeyn": "true"
@@ -127,9 +128,9 @@ extension Playlist {
      If the distance to the nearest speaker > outOfRangeDistance, then play demo stream.
     */
     private func updateSpeakerVolumes() {
-        if let params = self.currentParams {
+        if let params = self.currentParams, let speakers = self.speakers {
             var playDemo = true
-            for speaker in self.speakers {
+            for speaker in speakers {
                 let vol = speaker.updateVolume(at: params.location)
                 // Only consider playing the demo stream if all speakers are silent.
                 if vol > 0.001 {
@@ -147,11 +148,12 @@ extension Playlist {
     }
 
     private func playDemoStream() {
-        guard let params = self.currentParams
+        guard let params = self.currentParams,
+              let speakers = self.speakers
             else { return }
 
         // distance to nearest point on a speaker shape
-        let distToSpeaker = self.speakers.lazy.map {
+        let distToSpeaker = speakers.lazy.map {
             $0.distance(to: params.location)
         }.min() ?? 0
 
@@ -182,55 +184,76 @@ extension Playlist {
     /// Picks the next-up asset to play on the given track.
     /// Applies all the playlist-level and track-level filters to make the decision.
     func next(forTrack track: AudioTrack) -> Asset? {
-        let filteredAssets = self.allAssets.lazy.map { asset in 
+        let filteredAssets = self.allAssets.lazy.map { asset in
             (asset, self.filters.keep(asset, playlist: self, track: track))
         }.filter { (asset, rank) in
             rank != .discard
         }.sorted { a, b in
             a.1.rawValue < b.1.rawValue
+        }.sorted { a, b in
+            // play less played assets first
+            let dataA = userAssetData[a.0.id]
+            let dataB = userAssetData[b.0.id]
+            if let dataA = dataA, let dataB = dataB {
+                return dataA.playCount <= dataB.playCount
+            } else if dataA != nil {
+                return false
+            } else {
+                return true
+            }
         }.map { (asset, rank) in asset }
         
         print("\(filteredAssets.count) filtered assets")
         
         let next = filteredAssets.first
         if let next = next {
-            userAssetData.updateValue(UserAssetData(lastListen: Date()), forKey: next.id)
+            var playCount = 1
+            if let prevEntry = userAssetData[next.id] {
+                playCount += prevEntry.playCount
         }
+            userAssetData.updateValue(
+                UserAssetData(lastListen: Date(), playCount: playCount),
+                forKey: next.id
+            )
         print("picking asset: \(next)")
+        }
         return next
     }
     
+    private func updateTrackParams() {
+        if let tracks = self.tracks, let params = self.currentParams {
+            for track in tracks {
+                track.updateParams(params)
+            }
+        }
+    }
+    
     /// Grab the list of `AudioTrack`s for the current project.
-    private func updateTracks() {
-        if (self.tracks.isEmpty) {
-            let rw = RWFramework.sharedInstance
-            
-            rw.apiGetAudioTracks([
-                "project_id": String(project.id)
-            ]).then { data in
-                print("assets: using " + data.count.description + " tracks")
-                self.tracks = data
-                try self.tracks.forEach { it in
-                    // TODO: Try to remove playlist dependency. Maybe pass into method?
-                    it.playlist = self
-                    it.player.renderingAlgorithm = .soundField
-                    self.audioEngine.attach(it.player)
-                    self.audioEngine.connect(
-                        it.player,
-                        to: self.audioMixer,
-                        format: AVAudioFormat(standardFormatWithSampleRate: 96000, channels: 1)
-                    )
-                    if !self.audioEngine.isRunning {
-                        try self.audioEngine.start()
-                    }
-                }
-            }.catch { err in
-                print(err)
+    private func initTracks() {
+        let rw = RWFramework.sharedInstance
+        
+        rw.apiGetAudioTracks([
+            "project_id": String(project.id)
+        ]).then { data in
+            print("assets: using " + data.count.description + " tracks")
+            for it in data {
+                // TODO: Try to remove playlist dependency. Maybe pass into method?
+                it.playlist = self
+                it.player.renderingAlgorithm = .soundField
+                self.audioEngine.attach(it.player)
+                self.audioEngine.connect(
+                    it.player,
+                    to: self.audioMixer,
+                    format: AVAudioFormat(standardFormatWithSampleRate: 96000, channels: 1)
+                )
+                
             }
-        } else {
-            self.tracks.forEach { it in
-                it.updateParams(currentParams!)
+            if !self.audioEngine.isRunning {
+                try self.audioEngine.start()
             }
+            self.tracks = data
+        }.catch { err in
+            print(err)
         }
     }
     
@@ -263,7 +286,7 @@ extension Playlist {
                     sortMethod.sortRanking(for: a, in: self) < sortMethod.sortRanking(for: b, in: self)
                 })
             }
-            print("\(self.allAssets.count) total assets")
+            print("\(data.count) total assets")
         }.catch { err in
             print(err)
             self.lastUpdate = Date()
@@ -292,7 +315,7 @@ extension Playlist {
         // TODO: Use a filter to clear data for assets we've moved away from.
         
         // Tell our tracks to play any new assets.
-        self.updateTracks()
+        self.updateTrackParams()
     }
     
     /// Periodically check for newly published assets
@@ -338,7 +361,10 @@ extension Playlist {
         startTime = Date()
         
         // Start playing background music from speakers.
-        updateSpeakers()
+        initSpeakers()
+        
+        // Retrieve the list of tracks
+        initTracks()
         
         updateTimer = Timer(
             timeInterval: project.asset_refresh_interval,
@@ -354,8 +380,8 @@ extension Playlist {
     func pause() {
         if RWFramework.sharedInstance.isPlaying {
             RWFramework.sharedInstance.isPlaying = false
-            for s in speakers { s.pause() }
-            for t in tracks { t.pause() }
+            speakers?.forEach { $0.pause() }
+            tracks?.forEach { $0.pause() }
             if demoLooper != nil {
                 demoStream?.pause()
             }
@@ -365,8 +391,8 @@ extension Playlist {
     func resume() {
         if !RWFramework.sharedInstance.isPlaying {
             RWFramework.sharedInstance.isPlaying = true
-            for s in speakers { s.resume() }
-            for t in tracks { t.resume() }
+            speakers?.forEach { $0.resume() }
+            tracks?.forEach { $0.resume() }
             if demoLooper != nil {
                 demoStream?.play()
             }
@@ -375,8 +401,8 @@ extension Playlist {
     
     func skip() {
         // Fade out the currently playing assets on all tracks.
-        for t in tracks {
-            t.playNext(premature: true)
+        tracks?.forEach {
+            $0.playNext(premature: true)
         }
     }
 }
