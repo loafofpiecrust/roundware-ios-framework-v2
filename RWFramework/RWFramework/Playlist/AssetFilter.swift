@@ -9,6 +9,7 @@
 import Foundation
 import Promises
 import GEOSwift
+import SwiftyJSON
 
 /**
  The priority to place on an asset, or to discard it from use.
@@ -252,6 +253,50 @@ struct TimedRepeatFilter: AssetFilter {
             } else {
                 return .discard
             }
+        } else {
+            return .normal
+        }
+    }
+}
+
+class DynamicTagFilter: AssetFilter {
+    private let key: String
+    private let filter: AssetFilter
+    private lazy var tags = try! JSON(
+        data: UserDefaults.standard.data(forKey: "tags")!
+    ).array!
+
+    init(_ key: String, _ filter: AssetFilter) {
+        self.key = key
+        self.filter = filter
+    }
+
+    func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
+        guard let listenTagIds = RWFramework.sharedInstance.getSubmittableListenTagIDsSet()
+            else { return .normal }
+        
+        for tag in tags {
+            let tagFilter = tag["filter"].string!
+            if self.key == tagFilter && listenTagIds.contains(tag["id"].int!) {
+                return self.filter.keep(asset, playlist: playlist, track: track)
+            }
+        }
+        
+        return .normal
+    }
+}
+
+struct MostRecentFilter: AssetFilter {
+    private let maxAge: TimeInterval
+    
+    init(days: Int) {
+        self.maxAge = TimeInterval(days * 24 * 60 * 60)
+    }
+    
+    func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
+        let timeSinceCreated = Date().timeIntervalSince(asset.createdDate)
+        if timeSinceCreated > maxAge {
+            return .discard
         } else {
             return .normal
         }
