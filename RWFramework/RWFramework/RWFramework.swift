@@ -12,6 +12,7 @@ import CoreLocation
 import WebKit
 import AVFoundation
 import SystemConfiguration
+import Promises
 
 private let _RWFrameworkSharedInstance = RWFramework()
 
@@ -36,6 +37,7 @@ private lazy var __once: () = { () -> Void in
         TimedRepeatFilter(),
         // all the tags on an asset must be in our list of tags to listen for
         AnyTagsFilter(),
+        BlockedAssetsFilter(),
         // and are either geographically or temporally nearby.
         // Accept an asset if one of the following conditions is true
         AnyAssetFilters([
@@ -302,5 +304,26 @@ private lazy var __once: () = { () -> Void in
 
         return s
     }
-
+    
+    /// Block a specific asset from being played again.
+    /// Only works in practice if a `BlockedAssetFilter` is applied.
+    public func block(assetId: Int) -> Promise<Void> {
+        return apiPostAssetsIdVotes(
+            assetId.description,
+            vote_type: "block_asset"
+        ).then { _ -> Void in
+            let filter: BlockedAssetsFilter? = self.playlist.findFilter()
+            filter?.updateBlockedList()
+        }
+    }
+    
+    public func blockUser(assetId: Int) -> Promise<Void> {
+        return apiPostAssetsIdVotes(
+            assetId.description,
+            vote_type: "block_user"
+        ).then { _ -> Void in
+            let filter: BlockedAssetsFilter? = self.playlist.findFilter()
+            filter?.updateBlockedList()
+        }
+    }
 }

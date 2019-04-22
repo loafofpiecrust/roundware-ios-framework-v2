@@ -106,6 +106,10 @@ extension Playlist {
         self.filters.filters.append(filter)
     }
     
+    func findFilter<T: AssetFilter>() -> T? {
+        return self.filters.filters.first(where: { $0 is T }) as? T
+    }
+    
     func lastListenDate(for asset: Asset) -> Date? {
         return self.userAssetData[asset.id]?.lastListen
     }
@@ -286,7 +290,11 @@ extension Playlist {
                     sortMethod.sortRanking(for: a, in: self) < sortMethod.sortRanking(for: b, in: self)
                 })
             }
+
             print("\(data.count) total assets")
+
+            // notify filters that the asset pool is updated.
+            self.filters.onUpdateAssets(playlist: self)
         }.catch { err in
             print(err)
             self.lastUpdate = Date()

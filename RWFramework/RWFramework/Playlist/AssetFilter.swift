@@ -9,6 +9,7 @@
 import Foundation
 import Promises
 import GEOSwift
+import SwiftyJSON
 
 /**
  The priority to place on an asset, or to discard it from use.
@@ -27,6 +28,11 @@ protocol AssetFilter {
     /// Determines whether the given asset should be played on a particular track.
     /// - returns: .discard to skip the asset, otherwise rank it
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority
+    func onUpdateAssets(playlist: Playlist)
+}
+
+extension AssetFilter {
+    func onUpdateAssets(playlist: Playlist) {}
 }
 
 
@@ -44,6 +50,12 @@ struct AnyAssetFilters: AssetFilter {
         return filters.lazy
             .map { $0.keep(asset, playlist: playlist, track: track) }
             .first { $0 != .discard } ?? .discard
+    }
+
+    func onUpdateAssets(playlist: Playlist) {
+        for filter in filters {
+            filter.onUpdateAssets(playlist: playlist)
+        }
     }
 }
 
@@ -66,6 +78,12 @@ struct AllAssetFilters: AssetFilter {
         } else {
             // Otherwise, simply use the first returned priority
             return ranks.first ?? .normal
+        }
+    }
+
+    func onUpdateAssets(playlist: Playlist) {
+        for filter in filters {
+            filter.onUpdateAssets(playlist: playlist)
         }
     }
 }
@@ -254,6 +272,30 @@ struct TimedRepeatFilter: AssetFilter {
             }
         } else {
             return .normal
+        }
+    }
+}
+
+
+class BlockedAssetsFilter: AssetFilter {
+    private var blockedAssets: [Int]? = nil
+    
+    func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
+        if let blocked = self.blockedAssets, !blocked.contains(asset.id) {
+            return .normal
+        } else {
+            return .discard
+        }
+    }
+
+    func onUpdateAssets(playlist: Playlist) {
+        self.updateBlockedList()
+    }
+    
+    public func updateBlockedList() {
+        RWFramework.sharedInstance.apiGetBlockedAssets().then { d in
+            let json = try JSON(data: d)
+            self.blockedAssets = json["blocked_asset_ids"].array!.map { $0.int! }
         }
     }
 }
