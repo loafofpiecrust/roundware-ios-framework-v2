@@ -276,8 +276,10 @@ class DynamicTagFilter: AssetFilter {
             else { return .normal }
         
         for tag in tags {
-            let tagFilter = tag["filter"].string!
-            if self.key == tagFilter && listenTagIds.contains(tag["id"].int!) {
+            let tag = tag.dictionary!
+            let tagFilter = tag["filter"]?.string ?? ""
+            let tagId = tag["id"]?.int ?? -1
+            if self.key == tagFilter && listenTagIds.contains(tagId) {
                 return self.filter.keep(asset, playlist: playlist, track: track)
             }
         }
