@@ -49,6 +49,7 @@ private lazy var __once: () = { () -> Void in
         ]),
     ], sortBy: [
         SortRandomly(),
+        SortByLikes(),
     ])
 
     // Audio - Stream (see RWFrameworkAudioPlayer.swift)

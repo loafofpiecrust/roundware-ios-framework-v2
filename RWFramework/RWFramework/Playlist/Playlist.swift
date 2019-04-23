@@ -277,16 +277,21 @@ extension Playlist {
             opts["created__gte"] = dateFormatter.string(from: date)
         }
         
-        return rw.apiGetAssets(opts).then { data -> () in
+        return Promise {
+            let data = try await(rw.apiGetAssets(opts))
             self.lastUpdate = Date()
             self.allAssets.append(contentsOf: data)
-
+            print("\(data.count) added assets")
+            
+            // Ensure all sort methods are setup before sorting.
+            try await(all(self.sortMethods.map { $0.onRefreshAssets(in: self) }))
+            
+            // Sort the asset pool.
             for sortMethod in self.sortMethods {
                 self.allAssets.sort(by: { a, b in
                     sortMethod.sortRanking(for: a, in: self) < sortMethod.sortRanking(for: b, in: self)
                 })
             }
-            print("\(data.count) total assets")
         }.catch { err in
             print(err)
             self.lastUpdate = Date()
@@ -330,13 +335,15 @@ extension Playlist {
     }
     
     func start() {
+        DispatchQueue.promises = .global()
+        
         RWFramework.sharedInstance.isPlaying = false
         
         // Starts a session and retrieves project-wide config.
         RWFramework.sharedInstance.apiStartForClientMixing().then { project in
             self.project = project
             print("project settings: \(project)")
-            self.useProjectDefaults()
+            // self.useProjectDefaults()
             self.afterSessionInit()
         }
     }
