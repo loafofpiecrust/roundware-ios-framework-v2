@@ -99,9 +99,6 @@ class Playlist {
 }
 
 extension Playlist {
-    // func apply(filter: AssetFilter) {
-    //     playlistFilter.filters.append(filter)
-    // }
     func apply(filter: AssetFilter) {
         self.filters.filters.append(filter)
     }
@@ -275,9 +272,12 @@ extension Playlist {
         ]
         // Only grab assets added since the last update
         if let date = lastUpdate {
+            let timeZone = RWFrameworkConfig.getConfigValueAsNumber("session_timezone", group: .session).intValue
+
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
             dateFormatter.locale = Locale.init(identifier: "en_US_POSIX")
+            dateFormatter.timeZone = TimeZone(secondsFromGMT: timeZone)
             opts["created__gte"] = dateFormatter.string(from: date)
         }
         
@@ -291,7 +291,7 @@ extension Playlist {
                 })
             }
 
-            print("\(data.count) total assets")
+            print("\(data.count) added assets")
 
             // notify filters that the asset pool is updated.
             self.filters.onUpdateAssets(playlist: self)
@@ -327,7 +327,7 @@ extension Playlist {
     }
     
     /// Periodically check for newly published assets
-    @objc private func heartbeat() {
+    @objc func heartbeat() {
         self.updateAssets().then {
             // Update filtered assets given any newly uploaded assets
             self.updateParams()
@@ -373,8 +373,8 @@ extension Playlist {
         
         // Retrieve the list of tracks
         initTracks()
-        
-        updateTimer = Timer(
+
+        updateTimer = Timer.scheduledTimer(
             timeInterval: project.asset_refresh_interval,
             target: self,
             selector: #selector(self.heartbeat),
