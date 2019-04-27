@@ -268,7 +268,7 @@ extension Playlist {
         ]
         // Only grab assets added since the last update
         if let date = lastUpdate {
-            let timeZone = RWFrameworkConfig.getConfigValueAsNumber("session_timezone").intValue
+            let timeZone = RWFrameworkConfig.getConfigValueAsNumber("session_timezone", group: .session).intValue
 
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
@@ -324,7 +324,7 @@ extension Playlist {
     }
     
     /// Periodically check for newly published assets
-    @objc private func heartbeat() {
+    @objc func heartbeat() {
         self.updateAssets().then {
             // Update filtered assets given any newly uploaded assets
             self.updateParams()
@@ -372,8 +372,8 @@ extension Playlist {
         
         // Retrieve the list of tracks
         initTracks()
-        
-        updateTimer = Timer(
+
+        updateTimer = Timer.scheduledTimer(
             timeInterval: project.asset_refresh_interval,
             target: self,
             selector: #selector(self.heartbeat),
