@@ -245,11 +245,13 @@ protocol TrackState {
 }
 
 private class TimedTrackState: TrackState {
+    internal let duration: Double
     private(set) var timeLeft: Double
     private(set) var timer: Timer? = nil
     private var lastResume = Date()
     
     init(duration: Double) {
+        self.duration = duration
         self.timeLeft = duration
     }
     
@@ -299,7 +301,7 @@ private class DeadAir: TimedTrackState {
 
 /// Fading into the playing asset
 private class FadingIn: TimedTrackState {
-    private static let updateInterval = 0.075
+    private static let updateInterval = 0.02
     
     private let track: AudioTrack
     private let asset: Asset
@@ -326,13 +328,15 @@ private class FadingIn: TimedTrackState {
     }
     
     override func setupTimer() -> Timer {
+        let toAdd = Float(FadingIn.updateInterval / self.duration)
         return Timer.scheduledTimer(
             withTimeInterval: FadingIn.updateInterval,
             repeats: true
         ) { _ in
+            // self.timeLeft -= FadingIn.updateInterval
+            // let progress = (self.duration - self.timeLeft) / self.duration
             if self.track.player.volume < self.targetVolume {
-                let toAdd = FadingIn.updateInterval / self.timeLeft
-                self.track.player.volume += Float(toAdd)
+                self.track.player.volume += toAdd
             } else {
                 print("asset at full volume \(self.targetVolume)")
                 self.track.player.volume = self.targetVolume
@@ -409,7 +413,7 @@ private class PlayingAsset: TimedTrackState {
 
 /// Fading out of the playing asset
 private class FadingOut: TimedTrackState {
-    private static let updateInterval = 0.075
+    private static let updateInterval = 0.02
     
     private let track: AudioTrack
     private let asset: Asset
@@ -425,13 +429,13 @@ private class FadingOut: TimedTrackState {
     }
     
     override func setupTimer() -> Timer {
+        let toAdd = Float(FadingOut.updateInterval / self.duration)
         return Timer.scheduledTimer(
             withTimeInterval: FadingOut.updateInterval,
             repeats: true
         ) { _ in
             if self.track.player.volume > 0 {
-                let toAdd = FadingOut.updateInterval / self.timeLeft
-                self.track.player.volume -= Float(toAdd)
+                self.track.player.volume -= toAdd
             } else {
                 self.track.player.volume = 0
                 self.goToNextState()

@@ -17,7 +17,6 @@ struct UserAssetData {
     let playCount: Int
 }
 
-/// TODO: Make each of these optional and provide a default constructor
 struct StreamParams {
     let location: CLLocation
     let minDist: Double?
@@ -63,7 +62,7 @@ class Playlist {
         NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
             object: audioEngine,
-            queue: OperationQueue.main
+            queue: .main
         ) { _ in
             print("audio engine config change")
             if !self.audioEngine.isRunning {
