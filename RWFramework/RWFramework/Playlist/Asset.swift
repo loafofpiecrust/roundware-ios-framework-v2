@@ -1,10 +1,3 @@
-//
-//  Asset.swift
-//  RWFramework
-//
-//  Created by Taylor Snead on 7/20/18.
-//  Copyright © 2018 Roundware. All rights reserved.
-//
 
 import Foundation
 import CoreLocation
@@ -21,6 +14,7 @@ public struct Asset {
     let shape: Geometry?
     let weight: Double
     let description: String
+    let activeRegion: ClosedRange<Double>
 }
 
 extension Asset {
@@ -65,7 +59,8 @@ extension Asset {
                 tags: item["tag_ids"].array!.map { $0.int! },
                 shape: coordsShape,
                 weight: item["weight"].double ?? 0,
-                description: item["description"].string ?? ""
+                description: item["description"].string ?? "",
+                activeRegion: (item["start_time"].double!)...(item["end_time"].double!)
             )
         } ?? []
     }
