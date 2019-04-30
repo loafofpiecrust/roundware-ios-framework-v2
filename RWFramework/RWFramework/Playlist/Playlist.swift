@@ -346,6 +346,8 @@ extension Playlist {
             self.sortMethods = [SortRandomly()]
         case "by_weight":
             self.sortMethods = [SortByWeight()]
+        case "by_likes":
+            self.sortMethods = [SortByLikes()]
         default: break
         }
     }
