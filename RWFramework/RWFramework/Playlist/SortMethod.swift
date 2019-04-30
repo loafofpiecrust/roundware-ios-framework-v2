@@ -42,7 +42,10 @@ class SortByLikes: SortMethod {
 
     func onRefreshAssets(in playlist: Playlist) -> Promise<Void> {
         let projectId = playlist.project.id
-        return RWFramework.sharedInstance.apiGetVotesSummary(type: "like", projectId: projectId.description).then { data -> Void in
+        return RWFramework.sharedInstance.apiGetVotesSummary(
+            type: "like",
+            projectId: projectId.description
+        ).then { data -> Void in
             let voteData = try JSON(data: data).array
             self.assetVotes = voteData?.reduce(into: [Int: Int]()) { acc, data in
                 let assetId = data["asset_id"].int!
