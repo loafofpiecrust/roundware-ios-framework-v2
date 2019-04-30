@@ -9,6 +9,7 @@
 import Foundation
 import UIKit
 import CoreLocation
+import CoreMotion
 import WebKit
 import AVFoundation
 import SystemConfiguration
@@ -27,6 +28,8 @@ private lazy var __once: () = { () -> Void in
     /// A list of delegates that conform to RWFrameworkProtocol (see RWFrameworkProtocol.swift)
     open var delegates: NSHashTable<AnyObject> = NSHashTable.weakObjects()
 
+    let motionManager = CMMotionManager()
+    
     // Location (see RWFrameworkCoreLocation.swift)
     let locationManager: CLLocationManager = CLLocationManager()
     var lastRecordedLocation: CLLocation = CLLocation()
@@ -36,6 +39,8 @@ private lazy var __once: () = { () -> Void in
         TimedRepeatFilter(),
         // all the tags on an asset must be in our list of tags to listen for
         AnyTagsFilter(),
+        // if any track-level tag filters exist
+        TrackTagsFilter(),
         // and are either geographically or temporally nearby.
         // Accept an asset if one of the following conditions is true
         AnyAssetFilters([
@@ -68,7 +73,7 @@ private lazy var __once: () = { () -> Void in
 
     // Audio - Record (see RWFrameworkAudioRecorder.swift)
     /// RWFrameworkAudioRecorder.swift calls code in RWFrameworkAudioRecorder.m to perform recording when true
-    let useComplexRecordingMechanism = true
+    let useComplexRecordingMechanism = false
     var soundRecorder: AVAudioRecorder? = nil
     var soundPlayer: AVAudioPlayer? = nil
 
@@ -143,6 +148,7 @@ private lazy var __once: () = { () -> Void in
         mediaArray = loadMediaArray()
         rwUpdateApplicationIconBadgeNumber(mediaArray.count)
         
+        // setup location updates
         locationManager.delegate = self
         locationManager.distanceFilter = kCLDistanceFilterNone // This is updated later once getProjectsIdSuccess is called
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
