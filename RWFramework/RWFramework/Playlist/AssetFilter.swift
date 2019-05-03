@@ -252,7 +252,7 @@ struct TimedRepeatFilter: AssetFilter {
     }
 }
 
-class DynamicTagFilter: AssetFilter {
+struct DynamicTagFilter: AssetFilter {
     /// Mapping of dynamic filter name to tag id
     private static let tags = try! JSON(
         data: UserDefaults.standard.data(forKey: "tags")!
