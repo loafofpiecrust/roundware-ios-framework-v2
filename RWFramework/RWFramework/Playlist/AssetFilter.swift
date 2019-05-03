@@ -114,7 +114,8 @@ struct TrackTagsFilter: AssetFilter {
  */
 struct DistanceRangesFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        guard let params = playlist.currentParams,
+        guard playlist.project.geo_listen_enabled,
+              let params = playlist.currentParams,
               let loc = asset.location,
               let minDist = params.minDist,
               let maxDist = params.maxDist
@@ -135,7 +136,8 @@ struct DistanceRangesFilter: AssetFilter {
  */
 struct DistanceFixedFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        guard let params = playlist.currentParams,
+        guard playlist.project.geo_listen_enabled,
+              let params = playlist.currentParams,
               let assetLoc = asset.location
             else { return .discard }
 
@@ -154,7 +156,8 @@ struct DistanceFixedFilter: AssetFilter {
  */
 struct AssetShapeFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        guard let params = playlist.currentParams,
+        guard playlist.project.geo_listen_enabled,
+              let params = playlist.currentParams,
               let shape = asset.shape
             else { return .discard }
 
@@ -171,7 +174,8 @@ struct AssetShapeFilter: AssetFilter {
  */
 struct AngleFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        guard let opts = playlist.currentParams,
+        guard playlist.project.geo_listen_enabled,
+              let opts = playlist.currentParams,
               let loc = asset.location,
               let heading = opts.heading,
               let angularWidth = opts.angularWidth
