@@ -96,10 +96,6 @@ extension Playlist {
         self.filters.filters.append(filter)
     }
     
-    func findFilter<T: AssetFilter>() -> T? {
-        return self.filters.filters.first(where: { $0 is T }) as? T
-    }
-    
     func lastListenDate(for asset: Asset) -> Date? {
         return self.userAssetData[asset.id]?.lastListen
     }
