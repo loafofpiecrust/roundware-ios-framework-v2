@@ -21,11 +21,13 @@ protocol AssetFilter {
     /// Determines whether the given asset should be played on a particular track.
     /// - returns: .discard to skip the asset, otherwise rank it
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority
-    func onUpdateAssets(playlist: Playlist)
+    func onUpdateAssets(playlist: Playlist) -> Promise<Void>
 }
 
 extension AssetFilter {
-    func onUpdateAssets(playlist: Playlist) {}
+    func onUpdateAssets(playlist: Playlist) -> Promise<Void> {
+        return Promise(())
+    }
 }
 
 
@@ -45,9 +47,9 @@ struct AnyAssetFilters: AssetFilter {
             .first { $0 != .discard } ?? .discard
     }
 
-    func onUpdateAssets(playlist: Playlist) {
-        for filter in filters {
-            filter.onUpdateAssets(playlist: playlist)
+    func onUpdateAssets(playlist: Playlist) -> Promise<Void> {
+        return Promise {
+            try await(all(self.filters.map { $0.onUpdateAssets(playlist: playlist) }))
         }
     }
 }
@@ -74,9 +76,9 @@ struct AllAssetFilters: AssetFilter {
         }
     }
 
-    func onUpdateAssets(playlist: Playlist) {
-        for filter in filters {
-            filter.onUpdateAssets(playlist: playlist)
+    func onUpdateAssets(playlist: Playlist) -> Promise<Void> {
+        return Promise {
+            try await(all(self.filters.map { $0.onUpdateAssets(playlist: playlist) }))
         }
     }
 }
@@ -269,7 +271,10 @@ struct TimedRepeatFilter: AssetFilter {
     }
 }
 
-
+/**
+ Skips assets that the user has blocked,
+ or assets published by someone that the user has blocked.
+ */
 class BlockedAssetsFilter: AssetFilter {
     private var blockedAssets: [Int]? = nil
     
@@ -281,12 +286,8 @@ class BlockedAssetsFilter: AssetFilter {
         }
     }
 
-    func onUpdateAssets(playlist: Playlist) {
-        self.updateBlockedList()
-    }
-    
-    public func updateBlockedList() {
-        RWFramework.sharedInstance.apiGetBlockedAssets().then { d in
+    func onUpdateAssets(playlist: Playlist) -> Promise<Void> {
+        return RWFramework.sharedInstance.apiGetBlockedAssets().then { d -> Void in
             let json = try JSON(data: d)
             self.blockedAssets = json["blocked_asset_ids"].array!.map { $0.int! }
         }

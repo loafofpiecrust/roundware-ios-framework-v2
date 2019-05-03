@@ -273,7 +273,7 @@ extension Playlist {
             opts["created__gte"] = dateFormatter.string(from: date)
         }
         
-        return rw.apiGetAssets(opts).then { data -> () in
+        return rw.apiGetAssets(opts).then { data in
             self.lastUpdate = Date()
             self.allAssets.append(contentsOf: data)
 
@@ -286,11 +286,15 @@ extension Playlist {
             print("\(data.count) added assets")
 
             // notify filters that the asset pool is updated.
-            self.filters.onUpdateAssets(playlist: self)
+            return self.updateFilterData()
         }.catch { err in
             print(err)
             self.lastUpdate = Date()
         }
+    }
+    
+    func updateFilterData() -> Promise<Void> {
+        return self.filters.onUpdateAssets(playlist: self)
     }
     
     /// Framework should call this when stream parameters are updated.

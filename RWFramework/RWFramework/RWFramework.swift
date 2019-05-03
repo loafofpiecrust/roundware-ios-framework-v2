@@ -317,9 +317,8 @@ private lazy var __once: () = { () -> Void in
         return apiPostAssetsIdVotes(
             assetId.description,
             vote_type: "block_asset"
-        ).then { _ -> Void in
-            let filter: BlockedAssetsFilter? = self.playlist.findFilter()
-            filter?.updateBlockedList()
+        ).then { _ in
+            self.playlist.updateFilterData()
         }
     }
     
@@ -327,9 +326,8 @@ private lazy var __once: () = { () -> Void in
         return apiPostAssetsIdVotes(
             assetId.description,
             vote_type: "block_user"
-        ).then { _ -> Void in
-            let filter: BlockedAssetsFilter? = self.playlist.findFilter()
-            filter?.updateBlockedList()
+        ).then { _ in
+            self.playlist.updateFilterData()
         }
     }
 }
