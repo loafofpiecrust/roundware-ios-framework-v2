@@ -4,6 +4,12 @@ import SwiftyJSON
 import Promises
 
 protocol SortMethod {
+    /**
+     The sorting ranking of the given asset.
+     Assets will be sorted in ascending order of their rank.
+     Thus, returning a negatized result effectively causes
+     assets to be in descending order.
+    */
     func sortRanking(for asset: Asset, in playlist: Playlist) -> Double
     /// Load any data required before sorting.
     func onRefreshAssets(in playlist: Playlist) -> Promise<Void>

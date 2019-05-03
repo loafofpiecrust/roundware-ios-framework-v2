@@ -276,7 +276,7 @@ extension Playlist {
             print("\(data.count) added assets")
             
             // Ensure all sort methods are setup before sorting.
-            try await(all(self.sortMethods.map { $0.onRefreshAssets(in: self) }))
+            _ = try await(all(self.sortMethods.map { $0.onRefreshAssets(in: self) }))
             
             // Sort the asset pool.
             for sortMethod in self.sortMethods {
