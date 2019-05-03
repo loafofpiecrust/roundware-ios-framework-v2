@@ -253,11 +253,16 @@ struct TimedRepeatFilter: AssetFilter {
 }
 
 class DynamicTagFilter: AssetFilter {
+    /// Mapping of dynamic filter name to tag id
+    private static let tags = try! JSON(
+        data: UserDefaults.standard.data(forKey: "tags")!
+    ).array!.reduce(into: [String: [Int]]()) { acc, t in
+        let key = t["filter"].string!
+        acc[key] = (acc[key] ?? []) + [t["id"].int!]
+    }
+    
     private let key: String
     private let filter: AssetFilter
-    private lazy var tags = try! JSON(
-        data: UserDefaults.standard.data(forKey: "tags")!
-    ).array!
 
     init(_ key: String, _ filter: AssetFilter) {
         self.key = key
@@ -265,19 +270,16 @@ class DynamicTagFilter: AssetFilter {
     }
 
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        guard let listenTagIds = RWFramework.sharedInstance.getSubmittableListenTagIDsSet()
-            else { return .normal }
-        
-        for tag in tags {
-            let tag = tag.dictionary!
-            let tagFilter = tag["filter"]?.string ?? ""
-            let tagId = tag["id"]?.int ?? -1
-            if self.key == tagFilter && listenTagIds.contains(tagId) {
-                return self.filter.keep(asset, playlist: playlist, track: track)
-            }
+        // see if there are any tags using this filter
+        if let tagIds = DynamicTagFilter.tags[self.key],
+            // grab the list of enabled tags
+            let enabledTagIds = RWFramework.sharedInstance.getSubmittableListenTagIDsSet(),
+            // if any filter tags are enabled, apply the filter
+            tagIds.contains(where: { enabledTagIds.contains($0) }) {
+            return self.filter.keep(asset, playlist: playlist, track: track)
+        } else {
+            return .normal
         }
-        
-        return .normal
     }
 }
 
