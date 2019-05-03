@@ -335,7 +335,7 @@ extension Playlist {
         RWFramework.sharedInstance.apiStartForClientMixing().then { project in
             self.project = project
             print("project settings: \(project)")
-            // self.useProjectDefaults()
+            self.useProjectDefaults()
             self.afterSessionInit()
         }
     }
@@ -346,7 +346,7 @@ extension Playlist {
             self.sortMethods = [SortRandomly()]
         case "by_weight":
             self.sortMethods = [SortByWeight()]
-        case "by_likes":
+        case "by_like":
             self.sortMethods = [SortByLikes()]
         default: break
         }
