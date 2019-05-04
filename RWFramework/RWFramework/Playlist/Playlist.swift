@@ -179,7 +179,7 @@ extension Playlist {
         }.filter { (asset, rank) in
             rank != .discard
         }.sorted { a, b in
-            a.1.rawValue < b.1.rawValue
+            a.1.rawValue <= b.1.rawValue
         }.sorted { a, b in
             // play less played assets first
             let dataA = userAssetData[a.0.id]
