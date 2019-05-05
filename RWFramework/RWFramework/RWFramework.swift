@@ -52,6 +52,7 @@ private lazy var __once: () = { () -> Void in
         AnyTagsFilter(),
         // if any track-level tag filters exist
         TrackTagsFilter(),
+        DynamicTagFilter("_ten_most_recent_days", MostRecentFilter(days: 10))
     ], sortBy: [
         SortRandomly(),
     ])
