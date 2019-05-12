@@ -179,7 +179,7 @@ extension Playlist {
         }.filter { (asset, rank) in
             rank != .discard
         }.sorted { a, b in
-            a.1.rawValue < b.1.rawValue
+            a.1.rawValue <= b.1.rawValue
         }.sorted { a, b in
             // play less played assets first
             let dataA = userAssetData[a.0.id]
@@ -276,7 +276,7 @@ extension Playlist {
             print("\(data.count) added assets")
             
             // Ensure all sort methods are setup before sorting.
-            try await(all(self.sortMethods.map { $0.onRefreshAssets(in: self) }))
+            _ = try await(all(self.sortMethods.map { $0.onRefreshAssets(in: self) }))
             
             // Sort the asset pool.
             for sortMethod in self.sortMethods {

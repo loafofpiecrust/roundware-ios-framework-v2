@@ -558,7 +558,6 @@ extension RWFramework {
         }.catch { error in
             self.rwPostAssetsIdVotesFailure(error)
             self.apiProcessError(nil, error: error, caller: "apiPostAssetsIdVotes")
-            
         }
     }
 
