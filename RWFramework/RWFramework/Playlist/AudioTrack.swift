@@ -102,6 +102,16 @@ extension AudioTrack {
         }
     }
     
+    /// Returns currently playing asset
+    func getCurrentAsset() -> Asset? {
+        if let current = currentAsset {
+            return current
+        }
+        else {
+            return nil
+        }
+    }
+    
     /// Downloads and starts playing the currently selected asset
     private func loadNextAsset(start: Double? = nil, for duration: Double? = nil) throws {
         // Download asset into memory

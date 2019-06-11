@@ -35,7 +35,7 @@ private lazy var __once: () = { () -> Void in
     var lastRecordedLocation: CLLocation = CLLocation()
     var streamOptions = [String: Any]()
     var letFrameworkRequestWhenInUseAuthorizationForLocation = true
-    let playlist = Playlist(filters: [
+    public let playlist = Playlist(filters: [
         // and are either geographically or temporally nearby.
         // Accept an asset if one of the following conditions is true
         AnyAssetFilters([

@@ -19,7 +19,7 @@ struct StreamParams {
     let angularWidth: Double?
 }
 
-class Playlist {
+public class Playlist {
     // server communication
     private var lastUpdate: Date? = nil
     private var updateTimer: Timer? = nil
@@ -31,7 +31,7 @@ class Playlist {
     private var filters: AllAssetFilters
     private var sortMethods: [SortMethod]
     private var allAssets = [Asset]()
-    private var currentAsset: Asset? = nil
+    public var currentAsset: Asset? = nil
     /// Map asset ID to data like last listen time.
     private(set) var userAssetData = [Int: UserAssetData]()
 
@@ -404,6 +404,16 @@ extension Playlist {
         tracks?.forEach {
             $0.playNext(premature: true)
         }
+    }
+    public func getCurrentAssets() -> [Asset] {
+        // build array of currently playing assets
+        var currentAssets: [Asset] = []
+        tracks?.forEach {
+            if let trackAsset = $0.getCurrentAsset() {
+                currentAssets.append(trackAsset)
+            }
+        }
+        return currentAssets
     }
 }
 
