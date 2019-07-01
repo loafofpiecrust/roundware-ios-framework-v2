@@ -201,30 +201,30 @@ extension AudioTrack {
     /// - returns: if an asset has been chosen and started
     func fadeInNextAsset() {
         if let next = self.playlist?.next(forTrack: self) {
-        previousAsset = currentAsset
-        currentAsset = next
-        
-        let activeRegionLength = Double(next.activeRegion.upperBound - next.activeRegion.lowerBound)
-        let minDuration = min(Double(self.duration.lowerBound), activeRegionLength)
-        let maxDuration = min(Double(self.duration.upperBound), activeRegionLength)
-        let duration = (minDuration...maxDuration).random()
-        let latestStart = Double(next.activeRegion.upperBound) - duration
-        let start = (Double(next.activeRegion.lowerBound)...latestStart).random()
-        
-        // load the asset file
-        do {
-            try loadNextAsset(start: start, for: duration)
-        } catch {
-            print(error)
-            playNext()
-            return
-        }
-        
-        transition(to: FadingIn(
-            track: self,
-            asset: next,
-            assetDuration: duration
-        ))
+            previousAsset = currentAsset
+            currentAsset = next
+            
+            let activeRegionLength = Double(next.activeRegion.upperBound - next.activeRegion.lowerBound)
+            let minDuration = min(Double(self.duration.lowerBound), activeRegionLength)
+            let maxDuration = min(Double(self.duration.upperBound), activeRegionLength)
+            let duration = (minDuration...maxDuration).random()
+            let latestStart = Double(next.activeRegion.upperBound) - duration
+            let start = (Double(next.activeRegion.lowerBound)...latestStart).random()
+            
+            // load the asset file
+            do {
+                try loadNextAsset(start: start, for: duration)
+            } catch {
+                print(error)
+                playNext()
+                return
+            }
+            
+            transition(to: FadingIn(
+                track: self,
+                asset: next,
+                assetDuration: duration
+            ))
         } else if !(self.state is WaitingForAsset) {
             transition(to: WaitingForAsset(track: self))
         }
