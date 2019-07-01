@@ -20,6 +20,8 @@ public class AudioTrack {
     let tags: [Int]?
     let bannedDuration: Double
     let startWithSilence: Bool
+    /// Whether to fade out assets as the user leaves their proximity
+    let assetProximityFade: Bool
     
     var playlist: Playlist? = nil
     var previousAsset: Asset? = nil
@@ -57,7 +59,8 @@ public class AudioTrack {
         repeatRecordings: Bool,
         tags: [Int]?,
         bannedDuration: Double,
-        startWithSilence: Bool
+        startWithSilence: Bool,
+        assetProximityFade: Bool
     ) {
         self.id = id
         self.volume = volume
@@ -69,6 +72,7 @@ public class AudioTrack {
         self.tags = tags
         self.bannedDuration = bannedDuration
         self.startWithSilence = startWithSilence
+        self.assetProximityFade = assetProximityFade
     }
 }
 
@@ -87,7 +91,8 @@ extension AudioTrack {
                 repeatRecordings: it["repeatrecordings"]?.bool ?? false,
                 tags: it["tag_filters"]?.array?.map { $0.int! },
                 bannedDuration: it["banned_duration"]?.double ?? 600,
-                startWithSilence: it["start_with_silence"]?.bool ?? true
+                startWithSilence: it["start_with_silence"]?.bool ?? true,
+                assetProximityFade: it["asset_geo_fadeout"]?.bool ?? true
             )
         }
     }
@@ -100,6 +105,7 @@ extension AudioTrack {
         if let assetLoc = currentAsset?.location {
             setDynamicPan(at: assetLoc, params)
         }
+        self.state?.onUpdate()
     }
     
     /// Plays the next optimal asset nearby.
@@ -195,30 +201,30 @@ extension AudioTrack {
     /// - returns: if an asset has been chosen and started
     func fadeInNextAsset() {
         if let next = self.playlist?.next(forTrack: self) {
-            previousAsset = currentAsset
-            currentAsset = next
-            
-            let activeRegionLength = Double(next.activeRegion.upperBound - next.activeRegion.lowerBound)
-            let minDuration = min(Double(self.duration.lowerBound), activeRegionLength)
-            let maxDuration = min(Double(self.duration.upperBound), activeRegionLength)
-            let duration = (minDuration...maxDuration).random()
-            let latestStart = Double(next.activeRegion.upperBound) - duration
-            let start = (Double(next.activeRegion.lowerBound)...latestStart).random()
-            
-            // load the asset file
-            do {
-                try loadNextAsset(start: start, for: duration)
-            } catch {
-                print(error)
-                playNext()
-                return
-            }
-            
-            transition(to: FadingIn(
-                track: self,
-                asset: next,
-                assetDuration: duration
-            ))
+        previousAsset = currentAsset
+        currentAsset = next
+        
+        let activeRegionLength = Double(next.activeRegion.upperBound - next.activeRegion.lowerBound)
+        let minDuration = min(Double(self.duration.lowerBound), activeRegionLength)
+        let maxDuration = min(Double(self.duration.upperBound), activeRegionLength)
+        let duration = (minDuration...maxDuration).random()
+        let latestStart = Double(next.activeRegion.upperBound) - duration
+        let start = (Double(next.activeRegion.lowerBound)...latestStart).random()
+        
+        // load the asset file
+        do {
+            try loadNextAsset(start: start, for: duration)
+        } catch {
+            print(error)
+            playNext()
+            return
+        }
+        
+        transition(to: FadingIn(
+            track: self,
+            asset: next,
+            assetDuration: duration
+        ))
         } else if !(self.state is WaitingForAsset) {
             transition(to: WaitingForAsset(track: self))
         }
@@ -235,15 +241,27 @@ protocol TrackState {
     func finish()
     func pause()
     func resume()
+    /// Called when the track experiences a parameter update (eg. changed location)
+    func onUpdate()
 }
 
 private class TimedTrackState: TrackState {
-    private(set) var timeLeft: Double
     private(set) var timer: Timer? = nil
+    private var lastDuration: Double
     private var lastResume = Date()
+
+    var timeLeft: Double {
+        if let timer = self.timer, timer.isValid {
+            // playing
+            return lastDuration - Date().timeIntervalSince(lastResume)
+        } else {
+            // paused
+            return lastDuration
+        }
+    }
     
     init(duration: Double) {
-        self.timeLeft = duration
+        self.lastDuration = duration
     }
     
     func start() {
@@ -256,7 +274,7 @@ private class TimedTrackState: TrackState {
     }
     func pause() {
         timer?.invalidate()
-        timeLeft -= Date().timeIntervalSince(lastResume)
+        lastDuration -= Date().timeIntervalSince(lastResume)
     }
     
     func setupTimer() -> Timer {
@@ -268,6 +286,9 @@ private class TimedTrackState: TrackState {
     func resume() {
         lastResume = Date()
         timer = setupTimer()
+    }
+
+    func onUpdate() {
     }
 }
 
@@ -287,6 +308,34 @@ private class DeadAir: TimedTrackState {
     
     override func goToNextState() {
         self.track.fadeInNextAsset()
+    }
+}
+
+private class ResumableDeadAir: TimedTrackState {
+    private let track: AudioTrack
+    /// Last played track that can be resumed if eligible.
+    private let asset: Asset
+    private let remainingDuration: Double
+
+    init(track: AudioTrack, asset: Asset, remainingTime: Double) {
+        self.track = track
+        self.asset = asset
+        self.remainingDuration = remainingTime
+        super.init(duration: Double(track.deadAir.random()))
+    }
+
+    override func goToNextState() {
+        self.track.fadeInNextAsset()
+    }
+
+    override func onUpdate() {
+        if track.playlist?.passesFilters(asset, forTrack: track) == true {
+            track.transition(to: FadingIn(
+                track: track,
+                asset: asset,
+                assetDuration: remainingDuration
+            ))
+        }
     }
 }
 
@@ -398,6 +447,17 @@ private class PlayingAsset: TimedTrackState {
             duration: fadeOutDuration
         ))
     }
+
+    override func onUpdate() {
+        if track.assetProximityFade && track.playlist?.passesFilters(asset, forTrack: track) == false {
+            track.transition(to: FadingOut(
+                track: track,
+                asset: asset,
+                duration: fadeOutDuration,
+                remainingTime: timeLeft + fadeOutDuration
+            ))
+        }
+    }
 }
 
 /// Fading out of the playing asset
@@ -406,14 +466,17 @@ private class FadingOut: TimedTrackState {
     
     private let track: AudioTrack
     private let asset: Asset
+    private let remainingTime: Double?
     
     init(
         track: AudioTrack,
         asset: Asset,
-        duration: Double
+        duration: Double,
+        remainingTime: Double? = nil
     ) {
         self.track = track
         self.asset = asset
+        self.remainingTime = remainingTime
         super.init(duration: duration)
     }
     
@@ -427,6 +490,7 @@ private class FadingOut: TimedTrackState {
                 self.track.player.volume -= Float(toAdd)
             } else {
                 self.track.player.volume = 0
+                self.track.player.pause()
                 self.goToNextState()
             }
         }
@@ -444,7 +508,15 @@ private class FadingOut: TimedTrackState {
     }
     
     override func goToNextState() {
-        track.transition(to: DeadAir(track: track))
+        if let remainingTime = self.remainingTime {
+            track.transition(to: ResumableDeadAir(
+                track: track,
+                asset: asset,
+                remainingTime: remainingTime
+            ))
+        } else {
+            track.transition(to: DeadAir(track: track))
+        }
     }
 }
 

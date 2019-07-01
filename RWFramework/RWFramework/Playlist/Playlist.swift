@@ -209,6 +209,10 @@ extension Playlist {
         }
         return next
     }
+
+    func passesFilters(_ asset: Asset, forTrack track: AudioTrack) -> Bool {
+        return self.filters.keep(asset, playlist: self, track: track)
+    }
     
     private func updateTrackParams() {
         if let tracks = self.tracks, let params = self.currentParams {
