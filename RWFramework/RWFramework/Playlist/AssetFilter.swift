@@ -23,8 +23,10 @@ protocol AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority
 }
 
-
-/// Keep an asset if it's nearby or if it is timed to play now.
+/**
+ Filter composed of multiple inner filters
+ that keeps assets that pass one of these inner filters.
+ */
 struct AnyAssetFilters: AssetFilter {
     var filters: [AssetFilter]
     init(_ filters: [AssetFilter]) {
@@ -41,6 +43,10 @@ struct AnyAssetFilters: AssetFilter {
     }
 }
 
+/**
+ Filter composed of multiple inner filters
+ that keeps assets that pass every inner filter.
+ */
 struct AllAssetFilters: AssetFilter {
     var filters: [AssetFilter]
     init(_ filters: [AssetFilter]) {
