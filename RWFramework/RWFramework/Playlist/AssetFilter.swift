@@ -10,7 +10,11 @@ import SwiftyJSON
  project-level ordering preferences.
  */
 enum AssetPriority: Int {
-    case discard = -1
+    /// Discard the asset always
+    case discard = -2
+    /// Discard the asset only if not overridden
+    case passiveDiscard = -1
+
     case highest = 0
     case normal = 100
     case lowest = 999
@@ -37,9 +41,11 @@ struct AnyAssetFilters: AssetFilter {
         if filters.isEmpty {
             return .lowest
         }
-        return filters.lazy
+        let ranks = filters.lazy
             .map { $0.keep(asset, playlist: playlist, track: track) }
-            .first { $0 != .discard } ?? .discard
+        return ranks.first { $0 != .discard && $0 != .passiveDiscard }
+            ?? ranks.first { $0 != .discard }
+            ?? .discard
     }
 }
 
@@ -65,7 +71,8 @@ struct AllAssetFilters: AssetFilter {
             return .discard
         } else {
             // Otherwise, simply use the first returned priority
-            return ranks.first ?? .normal
+            // Ideally the first that isn't .passiveDiscard
+            return ranks.first { $0 != .passiveDiscard } ?? ranks.first ?? .normal
         }
     }
 }
@@ -74,7 +81,7 @@ struct AnyTagsFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
         // List of tag_ids to listen for.
         guard let listenTagIDs = RWFramework.sharedInstance.getSubmittableListenTagIDsSet()
-            else { return .lowest }
+            else { return .passiveDiscard }
 
         let matches = asset.tags.contains { assetTag in
             listenTagIDs.contains(assetTag)
@@ -88,7 +95,7 @@ struct AllTagsFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
         // List of tag_ids to listen for.
         guard let listenTagIDs = RWFramework.sharedInstance.getSubmittableListenTagIDsSet()
-            else { return .lowest }
+            else { return .passiveDiscard }
 
         let matches = asset.tags.allSatisfy { assetTag in
             listenTagIDs.contains(assetTag)
@@ -100,12 +107,9 @@ struct AllTagsFilter: AssetFilter {
 
 struct TrackTagsFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        guard let trackTags = track.tags
-            else { return .lowest }
-        
-        if (trackTags.count == 0) {
-            return .lowest
-        }
+        guard let trackTags = track.tags,
+              trackTags.count != 0
+            else { return .passiveDiscard }
         
         let matches = asset.tags.contains { assetTag in
             trackTags.contains(assetTag)
@@ -126,7 +130,7 @@ struct DistanceRangesFilter: AssetFilter {
               let loc = asset.location,
               let minDist = params.minDist,
               let maxDist = params.maxDist
-            else { return .discard }
+            else { return .passiveDiscard }
 
         let dist = params.location.distance(from: loc)
         if dist >= minDist && dist <= maxDist {
@@ -146,7 +150,7 @@ struct DistanceFixedFilter: AssetFilter {
         guard playlist.project.geo_listen_enabled,
               let params = playlist.currentParams,
               let assetLoc = asset.location
-            else { return .discard }
+            else { return .passiveDiscard }
 
         let listenerLoc = params.location
         let maxListenDist = playlist.project.recording_radius
@@ -166,7 +170,7 @@ struct AssetShapeFilter: AssetFilter {
         guard playlist.project.geo_listen_enabled,
               let params = playlist.currentParams,
               let shape = asset.shape
-            else { return .discard }
+            else { return .passiveDiscard }
 
         if shape.contains(params.location.toWaypoint()) {
             return .normal
@@ -186,8 +190,7 @@ struct AngleFilter: AssetFilter {
               let loc = asset.location,
               let heading = opts.heading,
               let angularWidth = opts.angularWidth
-            else { return .discard }
-
+            else { return .passiveDiscard }
 
         // We can keep any asset if our angular width covers all space.
         if angularWidth > 359.0 {
@@ -290,7 +293,7 @@ struct DynamicTagFilter: AssetFilter {
             tagIds.contains(where: { enabledTagIds.contains($0) }) {
             return self.filter.keep(asset, playlist: playlist, track: track)
         } else {
-            return .normal
+            return .passiveDiscard
         }
     }
 }

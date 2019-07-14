@@ -20,7 +20,7 @@ public class TimedAssetFilter: AssetFilter {
             ]).then { data in
                 self.timedAssets = data
             }
-            return .discard
+            return .passiveDiscard
         } else if timedAssets!.isEmpty {
             return .discard
         }
