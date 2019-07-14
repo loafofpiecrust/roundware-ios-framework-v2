@@ -81,7 +81,7 @@ struct AnyTagsFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
         // List of tag_ids to listen for.
         guard let listenTagIDs = RWFramework.sharedInstance.getSubmittableListenTagIDsSet()
-            else { return .passiveDiscard }
+            else { return .lowest }
 
         let matches = asset.tags.contains { assetTag in
             listenTagIDs.contains(assetTag)
@@ -95,7 +95,7 @@ struct AllTagsFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
         // List of tag_ids to listen for.
         guard let listenTagIDs = RWFramework.sharedInstance.getSubmittableListenTagIDsSet()
-            else { return .passiveDiscard }
+            else { return .lowest }
 
         let matches = asset.tags.allSatisfy { assetTag in
             listenTagIDs.contains(assetTag)
@@ -109,7 +109,7 @@ struct TrackTagsFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
         guard let trackTags = track.tags,
               trackTags.count != 0
-            else { return .passiveDiscard }
+            else { return .lowest }
         
         let matches = asset.tags.contains { assetTag in
             trackTags.contains(assetTag)
