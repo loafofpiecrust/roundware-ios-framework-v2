@@ -168,14 +168,11 @@ private lazy var __once: () = { () -> Void in
     open func start(_ letFrameworkRequestWhenInUseAuthorizationForLocation: Bool = true) {
         if (!compatibleOS()) {
             println("RWFramework requires iOS 8 or later")
-            return
         } else if (!hostIsReachable()) {
             println("RWFramework requires network connectivity")
-            return
         } else {
             self.letFrameworkRequestWhenInUseAuthorizationForLocation = letFrameworkRequestWhenInUseAuthorizationForLocation
             
-            println("start")
             self.playlist.start()
 
             preflightRecording()
