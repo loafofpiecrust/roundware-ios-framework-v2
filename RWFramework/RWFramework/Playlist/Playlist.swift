@@ -176,11 +176,11 @@ extension Playlist {
         let filteredAssets = self.allAssets.lazy.map { asset in
             (asset, self.filters.keep(asset, playlist: self, track: track))
         }.filter { (asset, rank) in
-            rank != .discard && rank != .passiveDiscard
+            rank != .discard
         }
             
         let sortedAssets = filteredAssets.sorted { a, b in
-            a.1.rawValue <= b.1.rawValue
+            a.1.rawValue >= b.1.rawValue
         }.sorted { a, b in
             // play less played assets first
             let dataA = userAssetData[a.0.id]
