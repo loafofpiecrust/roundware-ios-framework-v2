@@ -25,7 +25,7 @@ protocol AssetFilter {
 
 /**
  Filter composed of multiple inner filters
- that keeps assets that pass one of these inner filters.
+ that accepts assets that pass one of these inner filters.
  */
 struct AnyAssetFilters: AssetFilter {
     var filters: [AssetFilter]
@@ -45,7 +45,7 @@ struct AnyAssetFilters: AssetFilter {
 
 /**
  Filter composed of multiple inner filters
- that keeps assets that pass every inner filter.
+ that accepts assets that pass every inner filter.
  */
 struct AllAssetFilters: AssetFilter {
     var filters: [AssetFilter]
@@ -116,7 +116,7 @@ struct TrackTagsFilter: AssetFilter {
 }
 
 /**
- Plays an asset if the user is within range of it
+ Accepts an asset if the user is within range of it
  based on the current dynamic distance range.
  */
 struct DistanceRangesFilter: AssetFilter {
@@ -138,7 +138,7 @@ struct DistanceRangesFilter: AssetFilter {
 }
 
 /**
- Only plays an asset if the user is within the
+ Only accepts an asset if the user is within the
  project-configured recording radius.
  */
 struct DistanceFixedFilter: AssetFilter {
@@ -159,7 +159,7 @@ struct DistanceFixedFilter: AssetFilter {
 }
 
 /**
- Play an asset if the user is currently within its defined shape.
+ Accept an asset if the user is currently within its defined shape.
  */
 struct AssetShapeFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
@@ -177,7 +177,7 @@ struct AssetShapeFilter: AssetFilter {
 }
 
 /**
- Play an asset if it's within the current angle range.
+ Accept an asset if it's within the current angle range.
  */
 struct AngleFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
@@ -234,7 +234,6 @@ struct RepeatFilter: AssetFilter {
                 return .lowest
             } else {
                 // if this asset has been listened to at all, skip it.
-                // TODO: Only reject an asset until a certain time has passed?
                 return .discard
             }
         } else {
@@ -244,8 +243,7 @@ struct RepeatFilter: AssetFilter {
 }
 
 /**
- Prevents assets from repeating until
- a certain time threshold has passed.
+ Prevents assets from repeating until a certain time threshold has passed.
  */
 struct TimedRepeatFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
@@ -262,6 +260,10 @@ struct TimedRepeatFilter: AssetFilter {
     }
 }
 
+/**
+ Accept assets that pass an inner filter
+ if the tag with a given filter key is enabled.
+ */
 struct DynamicTagFilter: AssetFilter {
     /// Mapping of dynamic filter name to tag id
     private static let tags = try! JSON(
@@ -293,7 +295,12 @@ struct DynamicTagFilter: AssetFilter {
     }
 }
 
+/**
+ Only pass assets created within the most recent given time range.
+ `MostRecentFilter(days: 7)` accepts assets published within the last week.
+ */
 struct MostRecentFilter: AssetFilter {
+    /// Oldest age of assets to accept.
     private let maxAge: TimeInterval
     
     init(days: Int) {
