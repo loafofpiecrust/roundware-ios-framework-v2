@@ -295,6 +295,7 @@ extension Playlist {
     
     func updateFilterData() -> Promise<Void> {
         return self.filters.onUpdateAssets(playlist: self)
+            .recover { err in print(err) }
     }
     
     /// Framework should call this when stream parameters are updated.
