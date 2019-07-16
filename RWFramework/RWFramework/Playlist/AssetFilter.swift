@@ -45,7 +45,6 @@ struct AnyAssetFilters: AssetFilter {
         let ranks = filters.lazy
             .map { $0.keep(asset, playlist: playlist, track: track) }
         return ranks.first { $0 != .discard && $0 != .neutral }
-            ?? ranks.first { $0 != .discard }
             ?? .discard
     }
 }
@@ -73,7 +72,7 @@ struct AllAssetFilters: AssetFilter {
         } else {
             // Otherwise, simply use the first returned priority
             // Ideally the first that isn't .neutral
-            return ranks.first { $0 != .neutral } ?? ranks.first ?? .normal
+            return ranks.first { $0 != .neutral } ?? ranks.first!
         }
     }
 }
