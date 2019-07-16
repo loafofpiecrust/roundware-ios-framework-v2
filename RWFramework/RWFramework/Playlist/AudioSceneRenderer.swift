@@ -1,12 +1,10 @@
-//
-// Created by Taylor Snead on 12/28/18.
-//
 
 import Foundation
 import SceneKit
 import AVKit
 import SpriteKit
 
+/// CURRENTLY UNUSED
 @objc class AudioSceneRenderer: NSObject {
     // relevant to management
     public var scene: SCNScene?

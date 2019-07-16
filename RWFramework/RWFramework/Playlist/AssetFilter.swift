@@ -1,14 +1,8 @@
-//
-//  AssetFilter.swift
-//  RWFramework
-//
-//  Created by Taylor Snead on 7/31/18.
-//  Copyright © 2018 Roundware. All rights reserved.
-//
 
 import Foundation
 import Promises
 import GEOSwift
+import SwiftyJSON
 
 /**
  The priority to place on an asset, or to discard it from use.
@@ -29,8 +23,10 @@ protocol AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority
 }
 
-
-/// Keep an asset if it's nearby or if it is timed to play now.
+/**
+ Filter composed of multiple inner filters
+ that accepts assets that pass one of these inner filters.
+ */
 struct AnyAssetFilters: AssetFilter {
     var filters: [AssetFilter]
     init(_ filters: [AssetFilter]) {
@@ -47,6 +43,10 @@ struct AnyAssetFilters: AssetFilter {
     }
 }
 
+/**
+ Filter composed of multiple inner filters
+ that accepts assets that pass every inner filter.
+ */
 struct AllAssetFilters: AssetFilter {
     var filters: [AssetFilter]
     init(_ filters: [AssetFilter]) {
@@ -116,12 +116,13 @@ struct TrackTagsFilter: AssetFilter {
 }
 
 /**
- Plays an asset if the user is within range of it
+ Accepts an asset if the user is within range of it
  based on the current dynamic distance range.
  */
 struct DistanceRangesFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        guard let params = playlist.currentParams,
+        guard playlist.project.geo_listen_enabled,
+              let params = playlist.currentParams,
               let loc = asset.location,
               let minDist = params.minDist,
               let maxDist = params.maxDist
@@ -137,12 +138,13 @@ struct DistanceRangesFilter: AssetFilter {
 }
 
 /**
- Only plays an asset if the user is within the
+ Only accepts an asset if the user is within the
  project-configured recording radius.
  */
 struct DistanceFixedFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        guard let params = playlist.currentParams,
+        guard playlist.project.geo_listen_enabled,
+              let params = playlist.currentParams,
               let assetLoc = asset.location
             else { return .discard }
 
@@ -157,11 +159,12 @@ struct DistanceFixedFilter: AssetFilter {
 }
 
 /**
- Play an asset if the user is currently within its defined shape.
+ Accept an asset if the user is currently within its defined shape.
  */
 struct AssetShapeFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        guard let params = playlist.currentParams,
+        guard playlist.project.geo_listen_enabled,
+              let params = playlist.currentParams,
               let shape = asset.shape
             else { return .discard }
 
@@ -174,11 +177,12 @@ struct AssetShapeFilter: AssetFilter {
 }
 
 /**
- Play an asset if it's within the current angle range.
+ Accept an asset if it's within the current angle range.
  */
 struct AngleFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        guard let opts = playlist.currentParams,
+        guard playlist.project.geo_listen_enabled,
+              let opts = playlist.currentParams,
               let loc = asset.location,
               let heading = opts.heading,
               let angularWidth = opts.angularWidth
@@ -230,7 +234,6 @@ struct RepeatFilter: AssetFilter {
                 return .lowest
             } else {
                 // if this asset has been listened to at all, skip it.
-                // TODO: Only reject an asset until a certain time has passed?
                 return .discard
             }
         } else {
@@ -240,8 +243,7 @@ struct RepeatFilter: AssetFilter {
 }
 
 /**
- Prevents assets from repeating until
- a certain time threshold has passed.
+ Prevents assets from repeating until a certain time threshold has passed.
  */
 struct TimedRepeatFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
@@ -252,6 +254,63 @@ struct TimedRepeatFilter: AssetFilter {
             } else {
                 return .discard
             }
+        } else {
+            return .normal
+        }
+    }
+}
+
+/**
+ Accept assets that pass an inner filter
+ if the tag with a given filter key is enabled.
+ */
+struct DynamicTagFilter: AssetFilter {
+    /// Mapping of dynamic filter name to tag id
+    private static let tags = try! JSON(
+        data: UserDefaults.standard.data(forKey: "tags")!
+    ).array!.reduce(into: [String: [Int]]()) { acc, t in
+        let key = t["filter"].string!
+        acc[key] = (acc[key] ?? []) + [t["id"].int!]
+    }
+    
+    private let key: String
+    private let filter: AssetFilter
+
+    init(_ key: String, _ filter: AssetFilter) {
+        self.key = key
+        self.filter = filter
+    }
+
+    func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
+        // see if there are any tags using this filter
+        if let tagIds = DynamicTagFilter.tags[self.key],
+            // grab the list of enabled tags
+            let enabledTagIds = RWFramework.sharedInstance.getSubmittableListenTagIDsSet(),
+            // if any filter tags are enabled, apply the filter
+            tagIds.contains(where: { enabledTagIds.contains($0) }) {
+            return self.filter.keep(asset, playlist: playlist, track: track)
+        } else {
+            return .normal
+        }
+    }
+}
+
+/**
+ Only pass assets created within the most recent given time range.
+ `MostRecentFilter(days: 7)` accepts assets published within the last week.
+ */
+struct MostRecentFilter: AssetFilter {
+    /// Oldest age of assets to accept.
+    private let maxAge: TimeInterval
+    
+    init(days: Int) {
+        self.maxAge = TimeInterval(days * 24 * 60 * 60)
+    }
+    
+    func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
+        let timeSinceCreated = Date().timeIntervalSince(asset.createdDate)
+        if timeSinceCreated > maxAge {
+            return .discard
         } else {
             return .normal
         }

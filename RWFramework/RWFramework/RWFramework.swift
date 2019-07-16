@@ -36,11 +36,6 @@ private lazy var __once: () = { () -> Void in
     var streamOptions = [String: Any]()
     var letFrameworkRequestWhenInUseAuthorizationForLocation = true
     let playlist = Playlist(filters: [
-        TimedRepeatFilter(),
-        // all the tags on an asset must be in our list of tags to listen for
-        AnyTagsFilter(),
-        // if any track-level tag filters exist
-        TrackTagsFilter(),
         // and are either geographically or temporally nearby.
         // Accept an asset if one of the following conditions is true
         AnyAssetFilters([
@@ -52,8 +47,15 @@ private lazy var __once: () = { () -> Void in
             // or a user-specified distance range
             AllAssetFilters([DistanceRangesFilter(), AngleFilter()]),
         ]),
+        TimedRepeatFilter(),
+        // all the tags on an asset must be in our list of tags to listen for
+        AnyTagsFilter(),
+        // if any track-level tag filters exist
+        TrackTagsFilter(),
+        DynamicTagFilter("_ten_most_recent_days", MostRecentFilter(days: 10))
     ], sortBy: [
         SortRandomly(),
+        SortByLikes(),
     ])
 
     // Audio - Stream (see RWFrameworkAudioPlayer.swift)
@@ -162,18 +164,19 @@ private lazy var __once: () = { () -> Void in
     }
 
     /// Start kicks everything else off - call this to start the framework running.
-    /// Pass false for letFrameworkRequestWhenInUseAuthorizationForLocation if the caller would rather call requestWhenInUseAuthorizationForLocation() any time after rwGetProjectsIdSuccess is called.
+    /// - Parameter letFrameworkRequestWhenInUseAuthorizationForLocation: false if the caller would rather call requestWhenInUseAuthorizationForLocation() any time after rwGetProjectsIdSuccess is called.
     open func start(_ letFrameworkRequestWhenInUseAuthorizationForLocation: Bool = true) {
-        if (!compatibleOS()) { println("RWFramework requires iOS 8 or later"); return }
-        if (!hostIsReachable()) { println("RWFramework requires network connectivity"); return }
+        if (!compatibleOS()) {
+            println("RWFramework requires iOS 8 or later")
+        } else if (!hostIsReachable()) {
+            println("RWFramework requires network connectivity")
+        } else {
+            self.letFrameworkRequestWhenInUseAuthorizationForLocation = letFrameworkRequestWhenInUseAuthorizationForLocation
+            
+            self.playlist.start()
 
-        self.letFrameworkRequestWhenInUseAuthorizationForLocation = letFrameworkRequestWhenInUseAuthorizationForLocation
-
-        
-        println("start")
-        self.playlist.start()
-
-        preflightRecording()
+            preflightRecording()
+        }
     }
 
     /// Call this if you know you are done with the framework

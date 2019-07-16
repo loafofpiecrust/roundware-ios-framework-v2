@@ -1,26 +1,26 @@
-//
-//  Asset.swift
-//  RWFramework
-//
-//  Created by Taylor Snead on 7/20/18.
-//  Copyright © 2018 Roundware. All rights reserved.
-//
 
 import Foundation
 import CoreLocation
 import SwiftyJSON
 import GEOSwift
 
+/**
+ An individual piece of media contributed by a user or by project administrators.
+ This currently only considers audio assets.
+ */
 public struct Asset {
     let id: Int
     public let location: CLLocation?
+    /// URL pointing to the associated media file, relative to the project server
     let file: String
-    let length: Double // in seconds
+    /// Duration of the asset in seconds
+    let length: Double
     let createdDate: Date
     let tags: [Int]
     let shape: Geometry?
     let weight: Double
     let description: String
+    /// Range of time within the associated file that this asset represents.
     let activeRegion: ClosedRange<Double>
 }
 
@@ -49,6 +49,7 @@ extension Asset {
             }
 
             // Remove milliseconds from the creation date.
+            // We only need precision of seconds
             let createdString = item["created"].string!.replacingOccurrences(
                 of: "\\.\\d+", with: "", options: .regularExpression
             )
