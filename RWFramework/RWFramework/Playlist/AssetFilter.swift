@@ -50,9 +50,8 @@ struct AnyAssetFilters: AssetFilter {
     }
 
     func onUpdateAssets(playlist: Playlist) -> Promise<Void> {
-        return Promise {
-            try await(all(self.filters.map { $0.onUpdateAssets(playlist: playlist) }))
-        }
+        return all(self.filters.map { $0.onUpdateAssets(playlist: playlist) })
+            .then { _ -> Void in }
     }
 }
 
@@ -83,9 +82,8 @@ struct AllAssetFilters: AssetFilter {
     }
 
     func onUpdateAssets(playlist: Playlist) -> Promise<Void> {
-        return Promise {
-            try await(all(self.filters.map { $0.onUpdateAssets(playlist: playlist) }))
-        }
+        return all(self.filters.map { $0.onUpdateAssets(playlist: playlist) })
+            .then { _ -> Void in }
     }
 }
 
