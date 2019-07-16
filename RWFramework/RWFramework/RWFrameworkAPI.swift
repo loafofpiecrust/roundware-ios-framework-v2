@@ -578,6 +578,10 @@ extension RWFramework {
             self.apiProcessError(nil, error: error, caller: "apiGetAssetsIdVotes")
         }
     }
+
+    func apiGetVotesSummary(type: String? = nil, projectId: String? = nil, assetId: String? = nil) -> Promise<Data> {
+        return httpGetVotesSummary(type: type, projectId: projectId, assetId: assetId)
+    }
     
     public func apiGetSpeakers(_ dict: [String:String]) -> Promise<[Speaker]> {
         return httpGetSpeakers(dict).then { data -> [Speaker] in
