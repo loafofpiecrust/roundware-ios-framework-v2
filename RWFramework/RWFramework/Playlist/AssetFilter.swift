@@ -10,10 +10,15 @@ import SwiftyJSON
  project-level ordering preferences.
  */
 enum AssetPriority: Int {
+    /// Discard the asset always
     case discard = -1
-    case highest = 0
+
+    /// Accept the asset only if not overridden by any other priority
+    case neutral = 0
+
+    case lowest = 1
     case normal = 100
-    case lowest = 999
+    case highest = 999
 }
 
 /// Filter applied to assets as candidates for a specific track
@@ -21,6 +26,13 @@ protocol AssetFilter {
     /// Determines whether the given asset should be played on a particular track.
     /// - returns: .discard to skip the asset, otherwise rank it
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority
+    func onUpdateAssets(playlist: Playlist) -> Promise<Void>
+}
+
+extension AssetFilter {
+    func onUpdateAssets(playlist: Playlist) -> Promise<Void> {
+        return Promise(())
+    }
 }
 
 /**
@@ -37,9 +49,15 @@ struct AnyAssetFilters: AssetFilter {
         if filters.isEmpty {
             return .lowest
         }
-        return filters.lazy
+        let ranks = filters.lazy
             .map { $0.keep(asset, playlist: playlist, track: track) }
-            .first { $0 != .discard } ?? .discard
+        return ranks.first { $0 != .discard && $0 != .neutral }
+            ?? .discard
+    }
+
+    func onUpdateAssets(playlist: Playlist) -> Promise<Void> {
+        return all(self.filters.map { $0.onUpdateAssets(playlist: playlist) })
+            .then { _ -> Void in }
     }
 }
 
@@ -65,8 +83,14 @@ struct AllAssetFilters: AssetFilter {
             return .discard
         } else {
             // Otherwise, simply use the first returned priority
-            return ranks.first ?? .normal
+            // Ideally the first that isn't .neutral
+            return ranks.first { $0 != .neutral } ?? ranks.first!
         }
+    }
+
+    func onUpdateAssets(playlist: Playlist) -> Promise<Void> {
+        return all(self.filters.map { $0.onUpdateAssets(playlist: playlist) })
+            .then { _ -> Void in }
     }
 }
 
@@ -100,12 +124,9 @@ struct AllTagsFilter: AssetFilter {
 
 struct TrackTagsFilter: AssetFilter {
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        guard let trackTags = track.tags
+        guard let trackTags = track.tags,
+              trackTags.count != 0
             else { return .lowest }
-        
-        if (trackTags.count == 0) {
-            return .lowest
-        }
         
         let matches = asset.tags.contains { assetTag in
             trackTags.contains(assetTag)
@@ -126,7 +147,7 @@ struct DistanceRangesFilter: AssetFilter {
               let loc = asset.location,
               let minDist = params.minDist,
               let maxDist = params.maxDist
-            else { return .discard }
+            else { return .neutral }
 
         let dist = params.location.distance(from: loc)
         if dist >= minDist && dist <= maxDist {
@@ -146,7 +167,7 @@ struct DistanceFixedFilter: AssetFilter {
         guard playlist.project.geo_listen_enabled,
               let params = playlist.currentParams,
               let assetLoc = asset.location
-            else { return .discard }
+            else { return .neutral }
 
         let listenerLoc = params.location
         let maxListenDist = playlist.project.recording_radius
@@ -166,7 +187,7 @@ struct AssetShapeFilter: AssetFilter {
         guard playlist.project.geo_listen_enabled,
               let params = playlist.currentParams,
               let shape = asset.shape
-            else { return .discard }
+            else { return .neutral }
 
         if shape.contains(params.location.toWaypoint()) {
             return .normal
@@ -186,8 +207,7 @@ struct AngleFilter: AssetFilter {
               let loc = asset.location,
               let heading = opts.heading,
               let angularWidth = opts.angularWidth
-            else { return .discard }
-
+            else { return .neutral }
 
         // We can keep any asset if our angular width covers all space.
         if angularWidth > 359.0 {
@@ -261,6 +281,29 @@ struct TimedRepeatFilter: AssetFilter {
 }
 
 /**
+ Skips assets that the user has blocked,
+ or assets published by someone that the user has blocked.
+ */
+class BlockedAssetsFilter: AssetFilter {
+    private var blockedAssets: [Int]? = nil
+    
+    func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
+        if let blocked = self.blockedAssets, !blocked.contains(asset.id) {
+            return .normal
+        } else {
+            return .discard
+        }
+    }
+
+    func onUpdateAssets(playlist: Playlist) -> Promise<Void> {
+        return RWFramework.sharedInstance.apiGetBlockedAssets().then { d -> Void in
+            let json = try JSON(data: d)
+            self.blockedAssets = json["blocked_asset_ids"].array!.map { $0.int! }
+        }
+    }
+}
+
+/**
  Accept assets that pass an inner filter
  if the tag with a given filter key is enabled.
  */
@@ -290,7 +333,7 @@ struct DynamicTagFilter: AssetFilter {
             tagIds.contains(where: { enabledTagIds.contains($0) }) {
             return self.filter.keep(asset, playlist: playlist, track: track)
         } else {
-            return .normal
+            return .neutral
         }
     }
 }

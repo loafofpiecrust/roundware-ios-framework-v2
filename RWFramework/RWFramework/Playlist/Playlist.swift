@@ -10,7 +10,6 @@ struct UserAssetData {
     let playCount: Int
 }
 
-/// TODO: Make each of these optional and provide a default constructor
 struct StreamParams {
     let location: CLLocation
     let minDist: Double?
@@ -54,7 +53,7 @@ public class Playlist {
         NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
             object: audioEngine,
-            queue: OperationQueue.main
+            queue: .main
         ) { _ in
             print("audio engine config change")
             if !self.audioEngine.isRunning {
@@ -180,8 +179,10 @@ extension Playlist {
             (asset, self.filters.keep(asset, playlist: self, track: track))
         }.filter { (asset, rank) in
             rank != .discard
-        }.sorted { a, b in
-            a.1.rawValue <= b.1.rawValue
+        }
+            
+        let sortedAssets = filteredAssets.sorted { a, b in
+            a.1.rawValue >= b.1.rawValue
         }.sorted { a, b in
             // play less played assets first
             let dataA = userAssetData[a.0.id]
@@ -195,19 +196,20 @@ extension Playlist {
             }
         }.map { (asset, rank) in asset }
         
-        print("\(filteredAssets.count) filtered assets")
+        print("\(sortedAssets.count) filtered assets")
         
-        let next = filteredAssets.first
+        let next = sortedAssets.first
         if let next = next {
             var playCount = 1
             if let prevEntry = userAssetData[next.id] {
                 playCount += prevEntry.playCount
-        }
+            }
+            
             userAssetData.updateValue(
                 UserAssetData(lastListen: Date(), playCount: playCount),
                 forKey: next.id
             )
-        print("picking asset: \(next)")
+            print("picking asset: \(next)")
         }
         return next
     }
@@ -271,9 +273,9 @@ extension Playlist {
             opts["created__gte"] = dateFormatter.string(from: date)
         }
         
-        return Promise {
+        return Promise { () -> Promise<Void> in
+            // retrieve newly published assets
             let data = try await(rw.apiGetAssets(opts))
-            self.lastUpdate = Date()
             self.allAssets.append(contentsOf: data)
             print("\(data.count) added assets")
             
@@ -286,10 +288,19 @@ extension Playlist {
                     sortMethod.sortRanking(for: a, in: self) < sortMethod.sortRanking(for: b, in: self)
                 })
             }
+
+            // notify filters that the asset pool is updated.
+            return self.updateFilterData()
         }.catch { err in
             print(err)
+        }.always {
             self.lastUpdate = Date()
         }
+    }
+    
+    func updateFilterData() -> Promise<Void> {
+        return self.filters.onUpdateAssets(playlist: self)
+            .recover { err in print(err) }
     }
     
     /// Framework should call this when stream parameters are updated.
