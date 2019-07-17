@@ -10,7 +10,6 @@ struct UserAssetData {
     let playCount: Int
 }
 
-/// TODO: Make each of these optional and provide a default constructor
 struct StreamParams {
     let location: CLLocation
     let minDist: Double?
@@ -55,7 +54,7 @@ class Playlist {
         NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
             object: audioEngine,
-            queue: OperationQueue.main
+            queue: .main
         ) { _ in
             print("audio engine config change")
             if !self.audioEngine.isRunning {
@@ -177,8 +176,10 @@ extension Playlist {
             (asset, self.filters.keep(asset, playlist: self, track: track))
         }.filter { (asset, rank) in
             rank != .discard
-        }.sorted { a, b in
-            a.1.rawValue <= b.1.rawValue
+        }
+            
+        let sortedAssets = filteredAssets.sorted { a, b in
+            a.1.rawValue >= b.1.rawValue
         }.sorted { a, b in
             // play less played assets first
             let dataA = userAssetData[a.0.id]
@@ -192,19 +193,20 @@ extension Playlist {
             }
         }.map { (asset, rank) in asset }
         
-        print("\(filteredAssets.count) filtered assets")
+        print("\(sortedAssets.count) filtered assets")
         
-        let next = filteredAssets.first
+        let next = sortedAssets.first
         if let next = next {
             var playCount = 1
             if let prevEntry = userAssetData[next.id] {
                 playCount += prevEntry.playCount
-        }
+            }
+            
             userAssetData.updateValue(
                 UserAssetData(lastListen: Date(), playCount: playCount),
                 forKey: next.id
             )
-        print("picking asset: \(next)")
+            print("picking asset: \(next)")
         }
         return next
     }
