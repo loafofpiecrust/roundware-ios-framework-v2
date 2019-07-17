@@ -27,11 +27,10 @@ public class Playlist {
     private(set) var startTime = Date()
 
     // assets and filters
-
     private var filters: AllAssetFilters
     private var sortMethods: [SortMethod]
     private var allAssets = [Asset]()
-    public var currentAsset: Asset? = nil
+    
     /// Map asset ID to data like last listen time.
     private(set) var userAssetData = [Int: UserAssetData]()
 
@@ -91,6 +90,10 @@ public class Playlist {
 }
 
 extension Playlist {
+    public var currentlyPlayingAssets: [Asset] {
+        return tracks?.compactMap { $0.currentAsset } ?? []
+    }
+
     func apply(filter: AssetFilter) {
         self.filters.filters.append(filter)
     }
@@ -404,16 +407,6 @@ extension Playlist {
         tracks?.forEach {
             $0.playNext(premature: true)
         }
-    }
-    public func getCurrentAssets() -> [Asset] {
-        // build array of currently playing assets
-        var currentAssets: [Asset] = []
-        tracks?.forEach {
-            if let trackAsset = $0.getCurrentAsset() {
-                currentAssets.append(trackAsset)
-            }
-        }
-        return currentAssets
     }
 }
 
