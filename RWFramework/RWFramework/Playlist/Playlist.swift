@@ -218,7 +218,9 @@ extension Playlist {
         if let tracks = self.tracks, let params = self.currentParams {
             do {
                 // update all tracks in parallel, in case they need to load a new track
-                _ = try await(all(tracks.map { $0.updateParams(params) }))
+                _ = try await(all(tracks.map { t in
+                    Promise { t.updateParams(params) }
+                }))
             } catch {
                 print(error)
             }

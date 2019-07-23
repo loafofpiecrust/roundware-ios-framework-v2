@@ -84,16 +84,14 @@ extension AudioTrack {
         player.position = assetLoc.toAudioPoint(relativeTo: params.location)
     }
     
-    func updateParams(_ params: StreamParams) -> Promise<Void> {
-        return Promise {
-            // Pan the audio based on user location relative to the current asset
-            if let assetLoc = self.currentAsset?.location {
-                self.setDynamicPan(at: assetLoc, params)
-            }
-            // Change in parameters may make more assets available
-            if self.state is WaitingForAsset {
-                self.fadeInNextAsset()
-            }
+    func updateParams(_ params: StreamParams) {
+        // Pan the audio based on user location relative to the current asset
+        if let assetLoc = self.currentAsset?.location {
+            self.setDynamicPan(at: assetLoc, params)
+        }
+        // Change in parameters may make more assets available
+        if self.state is WaitingForAsset {
+            self.fadeInNextAsset()
         }
     }
     
