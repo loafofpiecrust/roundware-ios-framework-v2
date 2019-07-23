@@ -85,7 +85,7 @@ extension AudioTrack {
     }
     
     func updateParams(_ params: StreamParams) -> Promise<Void> {
-        return Promise { 
+        return Promise {
             // Pan the audio based on user location relative to the current asset
             if let assetLoc = self.currentAsset?.location {
                 self.setDynamicPan(at: assetLoc, params)
@@ -148,8 +148,8 @@ extension AudioTrack {
             player.scheduleFile(file, at: nil)
         }
 
-        if let params = self.playlist?.currentParams {
-            self.updateParams(params)
+        if let params = self.playlist?.currentParams, let loc = currentAsset?.location {
+            self.setDynamicPan(at: loc, params)
         }
     }
     
