@@ -416,7 +416,7 @@ extension Playlist {
     func skip() {
         // Fade out the currently playing assets on all tracks.
         tracks?.forEach {
-            $0.playNext(premature: true)
+            $0.playNext()
         }
     }
 }

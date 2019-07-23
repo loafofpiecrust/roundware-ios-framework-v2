@@ -4,6 +4,7 @@ import SwiftyJSON
 import CoreLocation
 import SceneKit
 import AVKit
+import Promises
 
 /**
  An AudioTrack has a set of parameters determining how its audio is played.
@@ -58,7 +59,7 @@ public class AudioTrack {
 
 extension AudioTrack {
     /// Amount of seconds to fade out when skipping an asset
-    private static let skipFadeOutTime = 0.5
+    private static let skipFadeOutTime: Double = 1.0
     
     static func from(data: Data) throws -> [AudioTrack] {
         let items = try JSON(data: data).array!
@@ -96,20 +97,14 @@ extension AudioTrack {
     
     /// Plays the next optimal asset nearby.
     /// - Parameter premature: whether to fade out the current asset or just start the next one.
-    func playNext(premature: Bool = true) {
-        // Can't fade out if playing the first asset
-        if premature {
-            if !(state is FadingOut) {
-                transition(to: FadingOut(
-                    track: self,
-                    asset: currentAsset!,
-                    duration: AudioTrack.skipFadeOutTime,
-                    followedByDeadAir: false
-                ))
-            }
-        } else {
-            // Just fade in for the first asset or at the end of an asset
-            fadeInNextAsset()
+    func playNext() {
+        if !(state is FadingOut) {
+            transition(to: FadingOut(
+                track: self,
+                asset: currentAsset!,
+                duration: AudioTrack.skipFadeOutTime,
+                followedByDeadAir: false
+            ))
         }
     }
     
@@ -142,8 +137,6 @@ extension AudioTrack {
         try data.write(to: url, options: .atomic)
 
         let file = try AVAudioFile(forReading: url)
-        
-        player.stop()
 
         if let start = start, let duration = duration {
             let startFrame = Int64(start * file.processingFormat.sampleRate)
@@ -151,13 +144,6 @@ extension AudioTrack {
             player.scheduleSegment(file, startingFrame: startFrame, frameCount: frameCount, at: nil)
         } else {
             player.scheduleFile(file, at: nil)
-        }
-
-        if !player.isPlaying {
-            player.play()
-            if let params = playlist?.currentParams {
-                updateParams(params)
-            }
         }
 
         if let params = self.playlist?.currentParams {
@@ -201,6 +187,8 @@ extension AudioTrack {
             let duration = (minDuration...maxDuration).random()
             let latestStart = Double(next.activeRegion.upperBound) - duration
             let start = (Double(next.activeRegion.lowerBound)...latestStart).random()
+            
+            player.stop()
             
             // load the asset file
             do {
