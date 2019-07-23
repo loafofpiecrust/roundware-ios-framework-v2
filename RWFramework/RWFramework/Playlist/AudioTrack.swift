@@ -158,6 +158,8 @@ extension AudioTrack {
     }
     
     func resume() {
+        // The first time we hit play, consider whether the track
+        // is configured to start with silence or an asset.
         if let state = state {
             state.resume()
         } else if self.startWithSilence {
