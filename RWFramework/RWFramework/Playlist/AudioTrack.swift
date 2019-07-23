@@ -4,6 +4,7 @@ import SwiftyJSON
 import CoreLocation
 import SceneKit
 import AVKit
+import Promises
 
 /**
  An AudioTrack has a set of parameters determining how its audio is played.
@@ -57,6 +58,9 @@ public class AudioTrack {
 }
 
 extension AudioTrack {
+    /// Amount of seconds to fade out when skipping an asset
+    private static let skipFadeOutTime: Double = 1.0
+    
     static func from(data: Data) throws -> [AudioTrack] {
         let items = try JSON(data: data).array!
         return items.map { item in
@@ -81,24 +85,26 @@ extension AudioTrack {
     }
     
     func updateParams(_ params: StreamParams) {
-        if let assetLoc = currentAsset?.location {
-            setDynamicPan(at: assetLoc, params)
+        // Pan the audio based on user location relative to the current asset
+        if let assetLoc = self.currentAsset?.location {
+            self.setDynamicPan(at: assetLoc, params)
+        }
+        // Change in parameters may make more assets available
+        if self.state is WaitingForAsset {
+            self.fadeInNextAsset()
         }
     }
     
     /// Plays the next optimal asset nearby.
     /// - Parameter premature: whether to fade out the current asset or just start the next one.
-    func playNext(premature: Bool = true) {
-        // Can't fade out if playing the first asset
-        if (premature) {
+    func playNext() {
+        if !(state is FadingOut) {
             transition(to: FadingOut(
                 track: self,
                 asset: currentAsset!,
-                duration: Double(fadeOutTime.lowerBound)
+                duration: AudioTrack.skipFadeOutTime,
+                followedByDeadAir: false
             ))
-        } else {
-            // Just fade in for the first asset or at the end of an asset
-            fadeInNextAsset()
         }
     }
     
@@ -140,15 +146,8 @@ extension AudioTrack {
             player.scheduleFile(file, at: nil)
         }
 
-        if !player.isPlaying {
-            player.play()
-            if let params = playlist?.currentParams {
-                updateParams(params)
-            }
-        }
-
-        if let params = self.playlist?.currentParams {
-            self.updateParams(params)
+        if let params = self.playlist?.currentParams, let loc = currentAsset?.location {
+            self.setDynamicPan(at: loc, params)
         }
     }
     
@@ -157,6 +156,8 @@ extension AudioTrack {
     }
     
     func resume() {
+        // The first time we hit play, consider whether the track
+        // is configured to start with silence or an asset.
         if let state = state {
             state.resume()
         } else if self.startWithSilence {
@@ -178,6 +179,7 @@ extension AudioTrack {
     
     /// - Returns: if an asset has been chosen and started
     func fadeInNextAsset() {
+        transition(to: LoadingState())
         if let next = self.playlist?.next(forTrack: self) {
             previousAsset = currentAsset
             currentAsset = next
@@ -188,6 +190,8 @@ extension AudioTrack {
             let duration = (minDuration...maxDuration).random()
             let latestStart = Double(next.activeRegion.upperBound) - duration
             let start = (Double(next.activeRegion.lowerBound)...latestStart).random()
+            
+            player.stop()
             
             // load the asset file
             do {
@@ -204,6 +208,7 @@ extension AudioTrack {
                 assetDuration: duration
             ))
         } else if !(self.state is WaitingForAsset) {
+            currentAsset = nil
             transition(to: WaitingForAsset(track: self))
         }
     }
@@ -219,6 +224,16 @@ protocol TrackState {
     func finish()
     func pause()
     func resume()
+}
+
+/**
+ Dummy state to represent the track while it loads up the next asset.
+ */
+private class LoadingState: TrackState {
+    func start() {}
+    func finish () {}
+    func pause() {}
+    func resume() {}
 }
 
 private class TimedTrackState: TrackState {
@@ -394,14 +409,17 @@ private class FadingOut: TimedTrackState {
     
     private let track: AudioTrack
     private let asset: Asset
+    private let followedByDeadAir: Bool
     
     init(
         track: AudioTrack,
         asset: Asset,
-        duration: Double
+        duration: Double,
+        followedByDeadAir: Bool = true
     ) {
         self.track = track
         self.asset = asset
+        self.followedByDeadAir = followedByDeadAir
         super.init(duration: duration)
     }
     
@@ -432,7 +450,11 @@ private class FadingOut: TimedTrackState {
     }
     
     override func goToNextState() {
-        track.transition(to: DeadAir(track: track))
+        if (followedByDeadAir) {
+            track.transition(to: DeadAir(track: track))
+        } else {
+            self.track.fadeInNextAsset()
+        }
     }
 }
 
