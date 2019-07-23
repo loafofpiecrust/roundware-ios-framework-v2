@@ -84,14 +84,16 @@ extension AudioTrack {
         player.position = assetLoc.toAudioPoint(relativeTo: params.location)
     }
     
-    func updateParams(_ params: StreamParams) {
-        // Pan the audio based on user location relative to the current asset
-        if let assetLoc = currentAsset?.location {
-            setDynamicPan(at: assetLoc, params)
-        }
-        // Change in parameters may make more assets available
-        if state is WaitingForAsset {
-            fadeInNextAsset()
+    func updateParams(_ params: StreamParams) -> Promise<Void> {
+        return Promise { 
+            // Pan the audio based on user location relative to the current asset
+            if let assetLoc = self.currentAsset?.location {
+                self.setDynamicPan(at: assetLoc, params)
+            }
+            // Change in parameters may make more assets available
+            if self.state is WaitingForAsset {
+                self.fadeInNextAsset()
+            }
         }
     }
     
@@ -177,6 +179,7 @@ extension AudioTrack {
     
     /// - Returns: if an asset has been chosen and started
     func fadeInNextAsset() {
+        transition(to: LoadingState())
         if let next = self.playlist?.next(forTrack: self) {
             previousAsset = currentAsset
             currentAsset = next
@@ -221,6 +224,16 @@ protocol TrackState {
     func finish()
     func pause()
     func resume()
+}
+
+/**
+ Dummy state to represent the track while it loads up the next asset.
+ */
+private class LoadingState: TrackState {
+    func start() {}
+    func finish () {}
+    func pause() {}
+    func resume() {}
 }
 
 private class TimedTrackState: TrackState {
