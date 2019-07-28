@@ -32,7 +32,7 @@ Pod::Spec.new do |s|
   # s.exclude_files = "Classes/Exclude"
 
 
-  s.ios.deployment_target = '11.0'
+  s.ios.deployment_target = '10.0'
   s.swift_version = "4.2"
 
   s.frameworks = 'AVFoundation', 'SceneKit', 'SpriteKit'
