@@ -4,13 +4,13 @@ import CoreLocation
 import AVFoundation
 import Promises
 import SceneKit
+import Repeat
 
 struct UserAssetData {
     let lastListen: Date
     let playCount: Int
 }
 
-/// TODO: Make each of these optional and provide a default constructor
 struct StreamParams {
     let location: CLLocation
     let minDist: Double?
@@ -19,19 +19,18 @@ struct StreamParams {
     let angularWidth: Double?
 }
 
-class Playlist {
+public class Playlist {
     // server communication
     private var lastUpdate: Date? = nil
-    private var updateTimer: Timer? = nil
+    private var updateTimer: Repeater? = nil
     private(set) var currentParams: StreamParams? = nil
     private(set) var startTime = Date()
 
     // assets and filters
-
     private var filters: AllAssetFilters
     private var sortMethods: [SortMethod]
-    private var allAssets = [Asset]()
-    private var currentAsset: Asset? = nil
+    public private(set) var allAssets = [Asset]()
+    
     /// Map asset ID to data like last listen time.
     private(set) var userAssetData = [Int: UserAssetData]()
 
@@ -44,11 +43,12 @@ class Playlist {
 
     private(set) var project: Project!
 
-//    let scene = SCNScene()
-    let audioEngine = AVAudioEngine()
-    let audioMixer = AVAudioEnvironmentNode()
+    private let audioEngine = AVAudioEngine()
+    private let audioMixer = AVAudioEnvironmentNode()
 
     init(filters: [AssetFilter], sortBy: [SortMethod]) {
+        DispatchQueue.promises = .global()
+
         self.filters = AllAssetFilters(filters)
         self.sortMethods = sortBy
         
@@ -56,10 +56,32 @@ class Playlist {
         NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
             object: audioEngine,
-            queue: OperationQueue.main
+            queue: .main
         ) { _ in
             print("audio engine config change")
             if !self.audioEngine.isRunning {
+                self.audioEngine.disconnectNodeOutput(self.audioMixer)
+                self.setupAudioConnection()
+            }
+        }
+        
+        // Restart the audio engine after interruptions.
+        // For example, another app playing audio over you or the user taking a phone call.
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: audioEngine,
+            queue: .main
+        ) { notification in
+            print("audio engine interruption")
+            let type = AVAudioSession.InterruptionType(
+                rawValue: notification.userInfo![AVAudioSessionInterruptionTypeKey] as! UInt
+            )
+            let options = AVAudioSession.InterruptionOptions(
+                rawValue: notification.userInfo![AVAudioSessionInterruptionOptionKey] as! UInt
+            )
+            if type == AVAudioSession.InterruptionType.ended
+                    && options.contains(.shouldResume)
+                    && !self.audioEngine.isRunning {
                 self.audioEngine.disconnectNodeOutput(self.audioMixer)
                 self.setupAudioConnection()
             }
@@ -78,6 +100,7 @@ class Playlist {
     }
     
     private func setupAudioConnection() {
+        print("booting audio engine")
         do {
             audioEngine.connect(
                 audioMixer,
@@ -92,6 +115,10 @@ class Playlist {
 }
 
 extension Playlist {
+    public var currentlyPlayingAssets: [Asset] {
+        return tracks?.compactMap { $0.currentAsset } ?? []
+    }
+
     func apply(filter: AssetFilter) {
         self.filters.filters.append(filter)
     }
@@ -178,8 +205,10 @@ extension Playlist {
             (asset, self.filters.keep(asset, playlist: self, track: track))
         }.filter { (asset, rank) in
             rank != .discard
-        }.sorted { a, b in
-            a.1.rawValue <= b.1.rawValue
+        }
+        
+        let sortedAssets = filteredAssets.sorted { a, b in
+            a.1.rawValue >= b.1.rawValue
         }.sorted { a, b in
             // play less played assets first
             let dataA = userAssetData[a.0.id]
@@ -193,42 +222,46 @@ extension Playlist {
             }
         }.map { (asset, rank) in asset }
         
-        print("\(filteredAssets.count) filtered assets")
+        print("\(sortedAssets.count) filtered assets")
         
-        let next = filteredAssets.first
+        let next = sortedAssets.first
         if let next = next {
             var playCount = 1
             if let prevEntry = userAssetData[next.id] {
                 playCount += prevEntry.playCount
-        }
+            }
+            
             userAssetData.updateValue(
                 UserAssetData(lastListen: Date(), playCount: playCount),
                 forKey: next.id
             )
-        print("picking asset: \(next)")
+            print("picking asset: \(next)")
         }
         return next
     }
 
     func passesFilters(_ asset: Asset, forTrack track: AudioTrack) -> Bool {
-        return self.filters.keep(asset, playlist: self, track: track)
+        return self.filters.keep(asset, playlist: self, track: track) != .discard
     }
     
     private func updateTrackParams() {
         if let tracks = self.tracks, let params = self.currentParams {
-            for track in tracks {
-                track.updateParams(params)
+            // update all tracks in parallel, in case they need to load a new track
+            for t in tracks {
+                Promise<Void>(on: .global()) {
+                    t.updateParams(params)
+                }
             }
         }
     }
     
     /// Grab the list of `AudioTrack`s for the current project.
-    private func initTracks() {
+    private func initTracks() -> Promise<Void> {
         let rw = RWFramework.sharedInstance
         
-        rw.apiGetAudioTracks([
+        return rw.apiGetAudioTracks([
             "project_id": String(project.id)
-        ]).then { data in
+        ]).then { data -> () in
             print("assets: using " + data.count.description + " tracks")
             for it in data {
                 // TODO: Try to remove playlist dependency. Maybe pass into method?
@@ -272,26 +305,36 @@ extension Playlist {
             dateFormatter.timeZone = TimeZone(secondsFromGMT: timeZone)
             opts["created__gte"] = dateFormatter.string(from: date)
         }
-        
-        return Promise {
-            let data = try await(rw.apiGetAssets(opts))
-            self.lastUpdate = Date()
+
+        // retrieve newly published assets
+        return rw.apiGetAssets(opts).then { data -> () in
             self.allAssets.append(contentsOf: data)
             print("\(data.count) added assets")
-            
+        }.then {
             // Ensure all sort methods are setup before sorting.
-            _ = try await(all(self.sortMethods.map { $0.onRefreshAssets(in: self) }))
-            
+            return all(self.sortMethods.map {
+                $0.onRefreshAssets(in: self)
+            })
+        }.then { _ -> Promise<Void> in
             // Sort the asset pool.
             for sortMethod in self.sortMethods {
                 self.allAssets.sort(by: { a, b in
                     sortMethod.sortRanking(for: a, in: self) < sortMethod.sortRanking(for: b, in: self)
                 })
             }
+
+            // notify filters that the asset pool is updated.
+            return self.updateFilterData()
         }.catch { err in
             print(err)
+        }.always {
             self.lastUpdate = Date()
         }
+    }
+    
+    func updateFilterData() -> Promise<Void> {
+        return self.filters.onUpdateAssets(playlist: self)
+            .recover { err in print(err) }
     }
     
     /// Framework should call this when stream parameters are updated.
@@ -320,8 +363,8 @@ extension Playlist {
     }
     
     /// Periodically check for newly published assets
-    @objc internal func refreshAssetPool() {
-        self.updateAssets().then {
+    internal func refreshAssetPool() -> Promise<Void> {
+        return self.updateAssets().then {
             // Update filtered assets given any newly uploaded assets
             self.updateParams()
 
@@ -331,8 +374,6 @@ extension Playlist {
     }
     
     func start() {
-        DispatchQueue.promises = .global()
-        
         RWFramework.sharedInstance.isPlaying = false
         
         // Starts a session and retrieves project-wide config.
@@ -366,20 +407,21 @@ extension Playlist {
         startTime = Date()
         
         // Start playing background music from speakers.
-        initSpeakers()
+        let speakerUpdate = initSpeakers()
         
         // Retrieve the list of tracks
-        initTracks()
+        let trackUpdate = initTracks()
 
-        updateTimer = Timer.scheduledTimer(
-            timeInterval: project.asset_refresh_interval,
-            target: self,
-            selector: #selector(self.refreshAssetPool),
-            userInfo: nil,
-            repeats: true
-        )
         // Initial grab of assets and speakers.
-        updateTimer?.fire()
+        let assetsUpdate = refreshAssetPool()
+
+        all(speakerUpdate, trackUpdate, assetsUpdate).then { _ in
+            RWFramework.sharedInstance.rwStartedSuccessfully()
+        }
+
+        updateTimer = .every(.seconds(project.asset_refresh_interval)) { _ in
+            self.refreshAssetPool()
+        }
     }
     
     func pause() {
@@ -407,7 +449,7 @@ extension Playlist {
     func skip() {
         // Fade out the currently playing assets on all tracks.
         tracks?.forEach {
-            $0.playNext(premature: true)
+            $0.playNext()
         }
     }
 }

@@ -354,7 +354,6 @@ extension RWFramework {
         if (self.streamID == 0) { return }
 
         httpPatchStreamsId(self.streamID.description, tagIds: tag_ids, streamPatchOptions: streamPatchOptions).then { data in
-//            self.patchStreamsIdSuccess(data!)
             self.rwPatchStreamsIdSuccess(data)
         }.catch { error in
             self.rwPatchStreamsIdFailure(error)
@@ -523,6 +522,13 @@ extension RWFramework {
             self.apiProcessError(nil, error: error, caller: "apiGetTimedAssets")
         }
     }
+
+    func apiGetBlockedAssets() -> Promise<Data> {
+        let session_id = RWFrameworkConfig.getConfigValueAsNumber("session_id", group: RWFrameworkConfig.ConfigGroup.client)
+        let project_id = RWFrameworkConfig.getConfigValueAsNumber("project_id")
+
+        return httpGetBlockedAssets(project_id, session_id: session_id)
+    }
     
     /// MARK: PATCH assets id PUBLIC
     public func apiPatchAssetsId(_ asset_id: String, postData: [String: Any] = [:]) -> Promise<Data> {
@@ -582,7 +588,7 @@ extension RWFramework {
             return try Speaker.from(data: data)
         }.catch { error in
             self.rwGetSpeakersFailure(error)
-            self.apiProcessError(nil, error: error, caller: "apiGetAssets")
+            self.apiProcessError(nil, error: error, caller: "apiGetSpeakers")
         }
     }
 
