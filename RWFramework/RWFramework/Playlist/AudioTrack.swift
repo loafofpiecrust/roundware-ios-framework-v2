@@ -328,13 +328,18 @@ private class ResumableDeadAir: TimedTrackState {
     private let track: AudioTrack
     /// Last played track that can be resumed if eligible.
     private let asset: Asset
-    private let remainingDuration: Double
+    private let remainingDurationOfAsset: Double
 
     init(track: AudioTrack, asset: Asset, remainingTime: Double) {
         self.track = track
         self.asset = asset
-        self.remainingDuration = remainingTime
+        self.remainingDurationOfAsset = remainingTime
         super.init(duration: Double(track.deadAir.random()))
+    }
+
+    override func start() {
+        super.start()
+        print("in resumable silence for \(self.timeLeft)")
     }
 
     override func goToNextState() {
@@ -343,10 +348,11 @@ private class ResumableDeadAir: TimedTrackState {
 
     override func onUpdate() {
         if track.playlist?.passesFilters(asset, forTrack: track) == true {
+            print("resuming previous asset")
             track.transition(to: FadingIn(
                 track: track,
                 asset: asset,
-                assetDuration: remainingDuration
+                assetDuration: remainingDurationOfAsset
             ))
         }
     }
@@ -451,6 +457,9 @@ private class PlayingAsset: TimedTrackState {
     }
     
     override func goToNextState() {
+        // Tell the playlist we've finished the asset
+        track.playlist?.recordFinishedPlaying(asset: asset)
+        // and fade into the next one
         track.transition(to: FadingOut(
             track: track,
             asset: asset,
@@ -520,14 +529,16 @@ private class FadingOut: TimedTrackState {
     }
     
     override func goToNextState() {
+        if (followedByDeadAir) {
         if let remainingTime = self.remainingTime {
             track.transition(to: ResumableDeadAir(
                 track: track,
                 asset: asset,
                 remainingTime: remainingTime
             ))
-        } else if (followedByDeadAir) {
+            } else {
             track.transition(to: DeadAir(track: track))
+            }
         } else {
             self.track.fadeInNextAsset()
         }
