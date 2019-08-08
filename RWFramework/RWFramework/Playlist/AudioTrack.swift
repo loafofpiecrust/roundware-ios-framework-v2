@@ -333,10 +333,10 @@ private class ResumableDeadAir: TimedTrackState {
     private let asset: Asset
     private let remainingDurationOfAsset: Double
 
-    init(track: AudioTrack, asset: Asset, remainingTime: Double) {
+    init(track: AudioTrack, asset: Asset, remainingAssetTime: Double) {
         self.track = track
         self.asset = asset
-        self.remainingDurationOfAsset = remainingTime
+        self.remainingDurationOfAsset = remainingAssetTime
         super.init(duration: Double(track.deadAir.upperBound))
     }
 
@@ -476,7 +476,7 @@ private class PlayingAsset: TimedTrackState {
                 track: track,
                 asset: asset,
                 duration: fadeOutDuration,
-                remainingTime: timeLeft + fadeOutDuration
+                remainingAssetTime: timeLeft
             ))
         }
     }
@@ -488,8 +488,8 @@ private class FadingOut: TimedTrackState {
     
     private let track: AudioTrack
     private let asset: Asset
-    private let remainingTime: Double?
     private let followedByDeadAir: Bool
+    private let remainingAssetTime: Double?
 
     override var canSkip: Bool { return false }
     
@@ -498,12 +498,12 @@ private class FadingOut: TimedTrackState {
         asset: Asset,
         duration: Double,
         followedByDeadAir: Bool = true,
-        remainingTime: Double? = nil
+        remainingAssetTime: Double? = nil
     ) {
         self.track = track
         self.asset = asset
-        self.remainingTime = remainingTime
         self.followedByDeadAir = followedByDeadAir
+        self.remainingAssetTime = remainingAssetTime
         super.init(duration: duration)
     }
     
@@ -533,11 +533,11 @@ private class FadingOut: TimedTrackState {
     
     override func goToNextState() {
         if (followedByDeadAir) {
-            if let remainingTime = self.remainingTime {
+            if let remainingTime = self.remainingAssetTime {
                 track.transition(to: ResumableDeadAir(
                     track: track,
                     asset: asset,
-                    remainingTime: remainingTime
+                    remainingAssetTime: remainingTime
                 ))
             } else {
                 track.transition(to: DeadAir(track: track))
