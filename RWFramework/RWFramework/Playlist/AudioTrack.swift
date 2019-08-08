@@ -24,8 +24,11 @@ public class AudioTrack {
     let tags: [Int]?
     let bannedDuration: Double
     let startWithSilence: Bool
-    /// Whether to fade out assets as the user leaves their proximity
-    let assetProximityFade: Bool
+    /**
+     Whether to fade out the playing asset if it gets filtered out.
+     Also enables resuming that asset if it quickly passes the filters again.
+     */
+    let fadeOutWhenFiltered: Bool
     
     var playlist: Playlist? = nil
     var previousAsset: Asset? = nil
@@ -46,7 +49,7 @@ public class AudioTrack {
         tags: [Int]?,
         bannedDuration: Double,
         startWithSilence: Bool,
-        assetProximityFade: Bool
+        fadeOutWhenFiltered: Bool
     ) {
         self.id = id
         self.volume = volume
@@ -58,7 +61,7 @@ public class AudioTrack {
         self.tags = tags
         self.bannedDuration = bannedDuration
         self.startWithSilence = startWithSilence
-        self.assetProximityFade = assetProximityFade
+        self.fadeOutWhenFiltered = fadeOutWhenFiltered
     }
 }
 
@@ -81,7 +84,7 @@ extension AudioTrack {
                 tags: it["tag_filters"]?.array?.map { $0.int! },
                 bannedDuration: it["banned_duration"]?.double ?? 600,
                 startWithSilence: it["start_with_silence"]?.bool ?? true,
-                assetProximityFade: it["asset_geo_fadeout"]?.bool ?? true
+                fadeOutWhenFiltered: it["fadeout_when_filtered"]?.bool ?? true
             )
         }
     }
@@ -334,7 +337,7 @@ private class ResumableDeadAir: TimedTrackState {
         self.track = track
         self.asset = asset
         self.remainingDurationOfAsset = remainingTime
-        super.init(duration: Double(track.deadAir.random()))
+        super.init(duration: Double(track.deadAir.upperBound))
     }
 
     override func start() {
@@ -468,7 +471,7 @@ private class PlayingAsset: TimedTrackState {
     }
 
     override func onUpdate() {
-        if track.assetProximityFade && track.playlist?.passesFilters(asset, forTrack: track) == false {
+        if track.fadeOutWhenFiltered && track.playlist?.passesFilters(asset, forTrack: track) == false {
             track.transition(to: FadingOut(
                 track: track,
                 asset: asset,
@@ -530,14 +533,14 @@ private class FadingOut: TimedTrackState {
     
     override func goToNextState() {
         if (followedByDeadAir) {
-        if let remainingTime = self.remainingTime {
-            track.transition(to: ResumableDeadAir(
-                track: track,
-                asset: asset,
-                remainingTime: remainingTime
-            ))
+            if let remainingTime = self.remainingTime {
+                track.transition(to: ResumableDeadAir(
+                    track: track,
+                    asset: asset,
+                    remainingTime: remainingTime
+                ))
             } else {
-            track.transition(to: DeadAir(track: track))
+                track.transition(to: DeadAir(track: track))
             }
         } else {
             self.track.fadeInNextAsset()
