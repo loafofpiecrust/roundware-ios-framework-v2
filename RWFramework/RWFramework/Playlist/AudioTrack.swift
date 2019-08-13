@@ -24,6 +24,11 @@ public class AudioTrack {
     let tags: [Int]?
     let bannedDuration: Double
     let startWithSilence: Bool
+    /**
+     Whether to fade out the playing asset if it gets filtered out.
+     Also enables resuming that asset if it quickly passes the filters again.
+     */
+    let fadeOutWhenFiltered: Bool
     
     var playlist: Playlist? = nil
     var previousAsset: Asset? = nil
@@ -43,7 +48,8 @@ public class AudioTrack {
         repeatRecordings: Bool,
         tags: [Int]?,
         bannedDuration: Double,
-        startWithSilence: Bool
+        startWithSilence: Bool,
+        fadeOutWhenFiltered: Bool
     ) {
         self.id = id
         self.volume = volume
@@ -55,6 +61,7 @@ public class AudioTrack {
         self.tags = tags
         self.bannedDuration = bannedDuration
         self.startWithSilence = startWithSilence
+        self.fadeOutWhenFiltered = fadeOutWhenFiltered
     }
 }
 
@@ -76,7 +83,8 @@ extension AudioTrack {
                 repeatRecordings: it["repeatrecordings"]?.bool ?? false,
                 tags: it["tag_filters"]?.array?.map { $0.int! },
                 bannedDuration: it["banned_duration"]?.double ?? 600,
-                startWithSilence: it["start_with_silence"]?.bool ?? true
+                startWithSilence: it["start_with_silence"]?.bool ?? true,
+                fadeOutWhenFiltered: it["fadeout_when_filtered"]?.bool ?? true
             )
         }
     }
@@ -94,6 +102,7 @@ extension AudioTrack {
         if self.state is WaitingForAsset {
             self.fadeInNextAsset()
         }
+        self.state?.onUpdate()
     }
     
     /// Plays the next optimal asset nearby.
@@ -169,6 +178,8 @@ protocol TrackState {
     func finish()
     func pause()
     func resume()
+    /// Called when the track experiences a parameter update (eg. changed location)
+    func onUpdate()
 }
 
 /**
@@ -221,7 +232,7 @@ private class LoadingState: TrackState {
     func finish () {}
     func pause() {}
     func resume() {}
-
+    func onUpdate() {}
 
     /// Downloads and starts playing the currently selected asset
     private func loadNextAsset(start: Double? = nil, for duration: Double? = nil) throws {
@@ -315,6 +326,9 @@ private class TimedTrackState: TrackState {
         lastResume = Date()
         timer?.start()
     }
+
+    func onUpdate() {
+    }
 }
 
 /// Silence between assets
@@ -333,6 +347,40 @@ private class DeadAir: TimedTrackState {
     
     override func goToNextState() {
         self.track.fadeInNextAsset()
+    }
+}
+
+private class ResumableDeadAir: TimedTrackState {
+    private let track: AudioTrack
+    /// Last played track that can be resumed if eligible.
+    private let asset: Asset
+    private let remainingDurationOfAsset: Double
+
+    init(track: AudioTrack, asset: Asset, remainingAssetTime: Double) {
+        self.track = track
+        self.asset = asset
+        self.remainingDurationOfAsset = remainingAssetTime
+        super.init(duration: Double(track.deadAir.upperBound))
+    }
+
+    override func start() {
+        super.start()
+        print("in resumable silence for \(self.timeLeft)")
+    }
+
+    override func goToNextState() {
+        self.track.fadeInNextAsset()
+    }
+
+    override func onUpdate() {
+        if track.playlist?.passesFilters(asset, forTrack: track) == true {
+            print("resuming previous asset")
+            track.transition(to: FadingIn(
+                track: track,
+                asset: asset,
+                assetDuration: remainingDurationOfAsset
+            ))
+        }
     }
 }
 
@@ -435,12 +483,30 @@ private class PlayingAsset: TimedTrackState {
     }
     
     override func goToNextState() {
+        // Tell the playlist we've finished the asset
+        track.playlist?.recordFinishedPlaying(asset: asset)
+        // and fade into the next one
         track.transition(to: FadingOut(
             track: track,
             asset: asset,
             duration: fadeOutDuration,
             followedBy: DeadAir(track: track)
         ))
+    }
+
+    override func onUpdate() {
+        if track.fadeOutWhenFiltered && track.playlist?.passesFilters(asset, forTrack: track) == false {
+            track.transition(to: FadingOut(
+                track: track,
+                asset: asset,
+                duration: fadeOutDuration,
+                followedBy: ResumableDeadAir(
+                    track: track,
+                    asset: asset,
+                    remainingAssetTime: timeLeft
+                )
+            ))
+        }
     }
 }
 
@@ -473,6 +539,7 @@ private class FadingOut: TimedTrackState {
                 self.track.player.volume -= toAdd
             } else {
                 self.track.player.volume = 0
+                self.track.player.pause()
                 self.goToNextState()
             }
         }
