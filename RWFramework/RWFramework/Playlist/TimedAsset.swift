@@ -12,10 +12,6 @@ public class TimedAssetFilter: AssetFilter {
     private var timedAssets: [TimedAsset]? = nil
 
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        if timedAssets!.isEmpty {
-            return .discard
-        }
-        
         // keep assets that are slated to start now or in the past few minutes
         //      AND haven't been played before
         // Units: seconds
