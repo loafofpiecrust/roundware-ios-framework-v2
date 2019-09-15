@@ -63,13 +63,6 @@ extension Asset {
             return nil
         }
     }
-
-    static let dateFormatter: DateFormatter = {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-        dateFormatter.locale = Locale.init(identifier: "en_US_POSIX")
-        return dateFormatter
-    }()
 }
 
 
