@@ -62,6 +62,18 @@ private lazy var __once: () = { () -> Void in
         SortRandomly(),
         SortByLikes(),
     ])
+    
+    static let decoder: JSONDecoder = {
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .formatted(.iso8601Full)
+        return dec
+    }()
+    
+    static let encoder: JSONEncoder = {
+        let enc = JSONEncoder()
+        enc.dateEncodingStrategy = .formatted(.iso8601Full)
+        return enc
+    }()
 
     // Audio - Stream (see RWFrameworkAudioPlayer.swift)
     var streamURL: URL? = nil
@@ -336,4 +348,15 @@ private lazy var __once: () = { () -> Void in
             self.playlist.updateFilterData()
         }
     }
+}
+
+extension DateFormatter {
+    static let iso8601Full: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
+    }()
 }

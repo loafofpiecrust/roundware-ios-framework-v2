@@ -119,6 +119,22 @@ extension Playlist {
         return tracks?.compactMap { $0.currentAsset } ?? []
     }
 
+    private var assetPoolFile: URL? {
+        do {
+            let docsDir = try FileManager.default.url(
+                for: .documentDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            return docsDir.appendingPathComponent("asset-pool.json")
+        } catch {
+            print(error)
+            return nil
+        }
+    }
+
+
     func apply(filter: AssetFilter) {
         self.filters.filters.append(filter)
     }
@@ -315,6 +331,10 @@ extension Playlist {
         return rw.apiGetAssets(opts).then { data -> () in
             self.allAssets.append(contentsOf: data)
             print("\(data.count) added assets")
+            // Only save the new asset pool if there are changes
+            if data.count > 0 {
+                self.saveAssetPool(date: Date())
+            }
         }.then {
             // Ensure all sort methods are setup before sorting.
             return all(self.sortMethods.map {
@@ -401,6 +421,36 @@ extension Playlist {
         default: break
         }
     }
+
+    private func saveAssetPool(date: Date) {
+        print("saving asset pool...")
+        do {
+            if let url = assetPoolFile {
+                print("...to \(url)")
+                let pool = AssetPool(assets: self.allAssets, date: date)
+                let data = try RWFramework.encoder.encode(pool)
+                try data.write(to: url)
+            }
+        } catch {
+            print(error)
+        }
+    }
+
+    private func loadAssetPool() {
+        // Load existing asset pool from a file
+        print("loading asset pool...")
+        do {
+            if let url = assetPoolFile {
+                let data = try Data(contentsOf: url)
+                let pool = try RWFramework.decoder.decode(AssetPool.self, from: data)
+                allAssets = pool.assets
+                lastUpdate = pool.date
+                print("loaded \(allAssets.count) assets from file")
+            }
+        } catch {
+            print(error)
+        }
+    }
     
     /**
      * Retrieve tags to filter by for the current project.
@@ -410,6 +460,9 @@ extension Playlist {
     private func afterSessionInit() {
         // Mark start of the session
         startTime = Date()
+
+        // Load cached assets first
+        loadAssetPool()
         
         // Start playing background music from speakers.
         let speakerUpdate = initSpeakers()
