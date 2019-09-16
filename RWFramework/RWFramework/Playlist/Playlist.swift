@@ -32,7 +32,7 @@ public class Playlist {
      Mapping of project id to asset pool, allowing for one app
      to support loading multiple projects at once.
      */
-    private var assetPools: [Int: AssetPool] = [:]
+    private var assetPool: AssetPool? = nil
     
     /// Map asset ID to data like last listen time.
     private(set) var userAssetData = [Int: UserAssetData]()
@@ -122,13 +122,13 @@ extension Playlist {
      All assets available in the current active project.
     */
     public var allAssets: [Asset] {
-        return assetPools[project.id]?.assets ?? []
+        return assetPool?.assets ?? []
     }
     
     public var currentlyPlayingAssets: [Asset] {
         return tracks?.compactMap { $0.currentAsset } ?? []
     }
-
+    
     private var assetPoolFile: URL? {
         do {
             let docsDir = try FileManager.default.url(
@@ -137,13 +137,14 @@ extension Playlist {
                 appropriateFor: nil,
                 create: true
             )
-            return docsDir.appendingPathComponent("asset-pool.json")
+            // Keep a separate asset pool file for each project
+            return docsDir.appendingPathComponent("asset-pool-\(project.id).json")
         } catch {
             print(error)
             return nil
         }
     }
-
+    
 
     func apply(filter: AssetFilter) {
         self.filters.filters.append(filter)
@@ -327,7 +328,7 @@ extension Playlist {
             "submitted": "true"
         ]
         // Only grab assets added since the last update
-        if let date = assetPools[project.id]?.date {
+        if let date = assetPool?.date {
             let timeZone = RWFrameworkConfig.getConfigValueAsNumber("session_timezone", group: .session).intValue
 
             let dateFormatter = DateFormatter()
@@ -341,7 +342,7 @@ extension Playlist {
         return rw.apiGetAssets(opts).then { data in
             // Append new assets to our existing pool
             print("\(data.count) added assets")
-            var assets = self.assetPools[self.project.id]?.assets ?? []
+            var assets = self.assetPool?.assets ?? []
             assets.append(contentsOf: data)
 
             // Ensure all sort methods have necessary data before sorting.
@@ -357,7 +358,7 @@ extension Playlist {
             }
             
             // Update this project's asset pool
-            self.assetPools[self.project.id] = AssetPool(assets: assets, date: Date())
+            self.assetPool = AssetPool(assets: assets, date: Date())
 
             // notify filters that the asset pool is updated.
             return self.updateFilterData()
@@ -438,7 +439,7 @@ extension Playlist {
         print("saving asset pool...")
         do {
             if let url = assetPoolFile {
-                let data = try RWFramework.encoder.encode(assetPools)
+                let data = try RWFramework.encoder.encode(assetPool)
                 try data.write(to: url)
             }
         } catch {
@@ -452,7 +453,7 @@ extension Playlist {
         do {
             if let url = assetPoolFile {
                 let data = try Data(contentsOf: url)
-                assetPools = try RWFramework.decoder.decode([Int: AssetPool].self, from: data)
+                assetPool = try RWFramework.decoder.decode(AssetPool.self, from: data)
             }
         } catch {
             print(error)
