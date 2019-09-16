@@ -13,7 +13,7 @@ public struct Asset: Codable {
     /// URL pointing to the associated media file, relative to the project server
     let file: String
     /// Duration of the asset in seconds
-    let length: Double
+    let length: Double?
     let createdDate: Date
     public let tags: [Int]
     let weight: Double
@@ -21,8 +21,8 @@ public struct Asset: Codable {
     private let longitude: Double?
     private let latitude: Double?
     private let coordinates: [[Double]]?
-    private let startTime: Double
-    private let endTime: Double
+    private let startTime: Double?
+    private let endTime: Double?
     
     enum CodingKeys: String, KeyedKey {
         case id
@@ -43,7 +43,7 @@ public struct Asset: Codable {
 extension Asset {
     /// Range of time within the associated file that this asset represents.
     var activeRegion: ClosedRange<Double> {
-        return startTime...endTime
+        return (startTime ?? 0)...(endTime ?? length ?? 0)
     }
     
     var shape: Geometry? {

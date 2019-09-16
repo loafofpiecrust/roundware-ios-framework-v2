@@ -341,7 +341,6 @@ extension Playlist {
         // retrieve newly published assets
         return rw.apiGetAssets(opts).then { data in
             // Append new assets to our existing pool
-            print("\(data.count) added assets")
             var assets = self.assetPool?.assets ?? []
             assets.append(contentsOf: data)
 
@@ -359,6 +358,8 @@ extension Playlist {
             
             // Update this project's asset pool
             self.assetPool = AssetPool(assets: assets, date: Date())
+            
+            print("\(data.count) added assets, total is \(assets.count)")
 
             // notify filters that the asset pool is updated.
             return self.updateFilterData()
