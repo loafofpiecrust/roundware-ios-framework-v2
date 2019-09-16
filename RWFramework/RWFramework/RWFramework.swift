@@ -65,7 +65,7 @@ private lazy var __once: () = { () -> Void in
     
     static let decoder: JSONDecoder = {
         let dec = JSONDecoder()
-        dec.dateDecodingStrategy = .formatted(.iso8601Full)
+        dec.dateDecodingStrategy = .flexibleISO
         return dec
     }()
     
@@ -359,4 +359,20 @@ extension DateFormatter {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter
     }()
+    static let iso8601 = ISO8601DateFormatter()
+}
+
+extension JSONDecoder.DateDecodingStrategy {
+    /// Attempts to decode dates with fractional seconds, then without.
+    static let flexibleISO = custom {
+        let container = try $0.singleValueContainer()
+        let s = try container.decode(String.self)
+        if let date = DateFormatter.iso8601Full.date(from: s) ?? DateFormatter.iso8601.date(from: s) {
+            return date
+        }
+        throw DecodingError.dataCorruptedError(
+            in: container,
+            debugDescription: "Invalid date: \(s)"
+        )
+    }
 }
