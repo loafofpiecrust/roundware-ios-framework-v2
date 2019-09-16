@@ -498,7 +498,7 @@ extension RWFramework {
     
     public func apiGetAudioTracks(_ dict: [String:String]) -> Promise<[AudioTrack]> {
         return httpGetAudioTracks(dict).then { data in
-            try AudioTrack.from(data: data)
+            try RWFramework.decoder.decode([AudioTrack].self, from: data)
         }.catch { error in
             self.apiProcessError(nil, error: error, caller: "apiGetAudioTracks")
         }
