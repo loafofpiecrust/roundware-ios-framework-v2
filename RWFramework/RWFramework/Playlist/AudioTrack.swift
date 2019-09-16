@@ -107,18 +107,20 @@ extension AudioTrack {
     
     /// Plays the next optimal asset nearby.
     /// - Parameter premature: whether to fade out the current asset or just start the next one.
-    func playNext() {
-        if state?.canSkip == true {
-            if let asset = currentAsset {
-                transition(to: FadingOut(
-                    track: self,
-                    asset: asset,
-                    duration: AudioTrack.skipFadeOutTime,
-                    followedBy: nil
-                ))
-            } else {
-                fadeInNextAsset()
+    public func playNext(asset next: Asset? = nil) {
+        if state?.canSkip == true, let asset = currentAsset {
+            var nextState: TrackState? = nil
+            if let next = next {
+                nextState = LoadingState(track: self, asset: next)
             }
+            transition(to: FadingOut(
+                track: self,
+                asset: asset,
+                duration: AudioTrack.skipFadeOutTime,
+                followedBy: nextState
+            ))
+        } else if let next = next {
+            fadeInNextAsset(next)
         }
     }
 
@@ -160,10 +162,9 @@ extension AudioTrack {
     func holdSilence() {
         transition(to: DeadAir(track: self))
     }
-    
-    /// - Returns: if an asset has been chosen and started
-    func fadeInNextAsset() {
-        transition(to: LoadingState(track: self))
+
+    func fadeInNextAsset(_ asset: Asset? = nil) {
+        transition(to: LoadingState(track: self, asset: asset))
     }
 }
 
@@ -224,7 +225,7 @@ private class LoadingState: TrackState {
                 asset: next,
                 assetDuration: duration
             ))
-        } else if !(track.state is WaitingForAsset) {
+        } else {
             track.currentAsset = nil
             track.transition(to: WaitingForAsset(track: track))
         }
@@ -335,6 +336,8 @@ private class TimedTrackState: TrackState {
 private class DeadAir: TimedTrackState {
     private let track: AudioTrack
     
+    override var canSkip: Bool { return false }
+    
     init(track: AudioTrack) {
         self.track = track
         super.init(duration: Double(track.deadAir.random()))
@@ -355,6 +358,8 @@ private class ResumableDeadAir: TimedTrackState {
     /// Last played track that can be resumed if eligible.
     private let asset: Asset
     private let remainingDurationOfAsset: Double
+    
+    override var canSkip: Bool { return false }
 
     init(track: AudioTrack, asset: Asset, remainingAssetTime: Double) {
         self.track = track
