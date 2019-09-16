@@ -21,7 +21,6 @@ struct StreamParams {
 
 public class Playlist {
     // server communication
-    private var lastUpdate: Date? = nil
     private var updateTimer: Repeater? = nil
     private(set) var currentParams: StreamParams? = nil
     private(set) var startTime = Date()
@@ -29,7 +28,11 @@ public class Playlist {
     // assets and filters
     private var filters: AllAssetFilters
     private var sortMethods: [SortMethod]
-    public private(set) var allAssets = [Asset]()
+    /**
+     Mapping of project id to asset pool, allowing for one app
+     to support loading multiple projects at once.
+     */
+    private var assetPools: [Int: AssetPool] = [:]
     
     /// Map asset ID to data like last listen time.
     private(set) var userAssetData = [Int: UserAssetData]()
@@ -115,6 +118,13 @@ public class Playlist {
 }
 
 extension Playlist {
+    /**
+     All assets available in the current active project.
+    */
+    public var allAssets: [Asset] {
+        return assetPools[project.id]?.assets ?? []
+    }
+    
     public var currentlyPlayingAssets: [Asset] {
         return tracks?.compactMap { $0.currentAsset } ?? []
     }
@@ -217,7 +227,7 @@ extension Playlist {
     /// Picks the next-up asset to play on the given track.
     /// Applies all the playlist-level and track-level filters to make the decision.
     func next(forTrack track: AudioTrack) -> Asset? {
-        let filteredAssets = self.allAssets.lazy.map { asset in
+        let filteredAssets = allAssets.lazy.map { asset in
             (asset, self.filters.keep(asset, playlist: self, track: track))
         }.filter { (asset, rank) in
             rank != .discard
@@ -317,7 +327,7 @@ extension Playlist {
             "submitted": "true"
         ]
         // Only grab assets added since the last update
-        if let date = lastUpdate {
+        if let date = assetPools[project.id]?.date {
             let timeZone = RWFrameworkConfig.getConfigValueAsNumber("session_timezone", group: .session).intValue
 
             let dateFormatter = DateFormatter()
@@ -328,32 +338,34 @@ extension Playlist {
         }
 
         // retrieve newly published assets
-        return rw.apiGetAssets(opts).then { data -> () in
-            self.allAssets.append(contentsOf: data)
+        return rw.apiGetAssets(opts).then { data in
+            // Append new assets to our existing pool
             print("\(data.count) added assets")
-            // Only save the new asset pool if there are changes
-            if data.count > 0 {
-                self.saveAssetPool(date: Date())
-            }
-        }.then {
-            // Ensure all sort methods are setup before sorting.
-            return all(self.sortMethods.map {
+            var assets = self.assetPools[self.project.id]?.assets ?? []
+            assets.append(contentsOf: data)
+
+            // Ensure all sort methods have necessary data before sorting.
+            _ = try await(all(self.sortMethods.map {
                 $0.onRefreshAssets(in: self)
-            })
-        }.then { _ -> Promise<Void> in
+            }))
+            
             // Sort the asset pool.
             for sortMethod in self.sortMethods {
-                self.allAssets.sort(by: { a, b in
+                assets.sort(by: { a, b in
                     sortMethod.sortRanking(for: a, in: self) < sortMethod.sortRanking(for: b, in: self)
                 })
             }
+            
+            // Update this project's asset pool
+            self.assetPools[self.project.id] = AssetPool(assets: assets, date: Date())
 
             // notify filters that the asset pool is updated.
             return self.updateFilterData()
         }.catch { err in
             print(err)
         }.always {
-            self.lastUpdate = Date()
+            // Cache the asset pool to reduce future launch time
+            self.saveAssetPool()
         }
     }
     
@@ -422,13 +434,11 @@ extension Playlist {
         }
     }
 
-    private func saveAssetPool(date: Date) {
+    private func saveAssetPool() {
         print("saving asset pool...")
         do {
             if let url = assetPoolFile {
-                print("...to \(url)")
-                let pool = AssetPool(assets: self.allAssets, date: date)
-                let data = try RWFramework.encoder.encode(pool)
+                let data = try RWFramework.encoder.encode(assetPools)
                 try data.write(to: url)
             }
         } catch {
@@ -442,10 +452,7 @@ extension Playlist {
         do {
             if let url = assetPoolFile {
                 let data = try Data(contentsOf: url)
-                let pool = try RWFramework.decoder.decode(AssetPool.self, from: data)
-                allAssets = pool.assets
-                lastUpdate = pool.date
-                print("loaded \(allAssets.count) assets from file")
+                assetPools = try RWFramework.decoder.decode([Int: AssetPool].self, from: data)
             }
         } catch {
             print(error)
