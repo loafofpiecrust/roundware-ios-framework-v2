@@ -118,6 +118,10 @@ public class Playlist {
 }
 
 extension Playlist {
+    public var isPlaying: Bool {
+        return self.tracks.contains { $0.isPlaying }
+    }
+    
     /**
      All assets available in the current active project.
     */
@@ -419,8 +423,6 @@ extension Playlist {
     }
     
     func start() {
-        RWFramework.sharedInstance.isPlaying = false
-        
         // Starts a session and retrieves project-wide config.
         RWFramework.sharedInstance.apiStartForClientMixing().then { project in
             self.project = project
@@ -498,8 +500,7 @@ extension Playlist {
     }
     
     func pause() {
-        if RWFramework.sharedInstance.isPlaying {
-            RWFramework.sharedInstance.isPlaying = false
+        if isPlaying {
             for s in speakers { s.pause() }
             for t in tracks { t.pause() }
             if demoLooper != nil {
@@ -509,8 +510,7 @@ extension Playlist {
     }
     
     func resume() {
-        if !RWFramework.sharedInstance.isPlaying {
-            RWFramework.sharedInstance.isPlaying = true
+        if !isPlaying {
             for s in speakers { s.resume() }
             for t in tracks { t.resume() }
             if demoLooper != nil {

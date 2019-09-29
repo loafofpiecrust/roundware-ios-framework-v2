@@ -11,7 +11,6 @@ import CoreLocation
 import Promises
 
 extension RWFramework {
-
     func apiStartForClientMixing() -> Promise<Project> {
         let device_id = UIDevice().identifierForVendor!.uuidString
         let client_type = UIDevice().model
@@ -20,15 +19,6 @@ extension RWFramework {
             // start a session
             .then { _ in self.apiPostSessions() }
             .then { data in try self.setupClientSession(data) }
-    }
-    
-    func apiStartUp(_ device_id: String, client_type: String, client_system: String) {
-        // Create new user for the session and save its info
-        apiPostUsers(device_id, client_type: client_type, client_system: client_system)
-            // start a session
-            .then { _ in self.apiPostSessions() }
-            // initialize all info associated with a session (UI config, tags, etc.)
-            .then { data in try self.setupSession(data) }
     }
 
     /// MARK: POST users
@@ -135,26 +125,6 @@ extension RWFramework {
         }
     }
 
-    private func setupSession(_ data: Data) throws {
-        var session_id : NSNumber = 0
-        if let dict = try? RWFramework.decoder.decode(Session.self, from: data) {
-            if let _session_id = dict.id {
-                session_id = NSNumber(value: _session_id)
-                RWFrameworkConfig.setConfigValue("session_id", value: session_id, group: RWFrameworkConfig.ConfigGroup.client)
-            } // TODO: Handle missing value
-        }
-
-        let project_id = RWFrameworkConfig.getConfigValueAsNumber("project_id")
-        
-        apiGetProjectsId(project_id, session_id: session_id)
-            .then { data in try self.setupStream(data, project_id: project_id, session_id: session_id) }
-            .then { self.apiGetProjectsIdTags(project_id, session_id: session_id) }
-            .then { _ in self.apiGetUIConfig(project_id, session_id: session_id) }
-            .then { _ in self.apiGetProjectsIdUIGroups(project_id, session_id: session_id) }
-            .then { _ in self.apiGetTagCategories() }
-    }
-
-
     /// MARK: GET projects id
     func apiGetProjectsId(_ project_id: NSNumber, session_id: NSNumber) -> Promise<Data> {
         return httpGetProjectsId(project_id, session_id: session_id).then { data -> Data in
@@ -166,42 +136,6 @@ extension RWFramework {
         }
     }
 
-    private func setupStream(_ data: Data, project_id: NSNumber, session_id: NSNumber) throws {
-        RWFrameworkConfig.setConfigDataAsDictionary(data, key: "project")
-
-        // TODO: where is this going to come from?
-        func configDisplayStartupMessage() {
-            let startupMessage = RWFrameworkConfig.getConfigValueAsString("startup_message", group: RWFrameworkConfig.ConfigGroup.notifications)
-            if (startupMessage.lengthOfBytes(using: String.Encoding.utf8) > 0) {
-                self.rwUpdateStatus(startupMessage)
-            }
-        }
-        configDisplayStartupMessage()
-
-        if letFrameworkRequestWhenInUseAuthorizationForLocation {
-            _ = requestWhenInUseAuthorizationForLocation()
-        }
-
-        let listen_enabled = RWFrameworkConfig.getConfigValueAsBool("listen_enabled")
-        if (listen_enabled) {
-            let geo_listen_enabled = RWFrameworkConfig.getConfigValueAsBool("geo_listen_enabled")
-            if (!geo_listen_enabled) {
-                apiPostStreams()
-            }
-            startHeartbeatTimer()
-        }
-
-        setupRecording()
-
-        // getProjectsIdSucceeded = true
-        
-//                apiGetProjectsIdTags(project_id, session_id: session_id)
-        
-        // a simpler alternative to apiGetProjectsIdTags and it's subsequent calls but needs
-        // to be properly vetted before turning off the more complex calls
-//                apiGetUIConfig(project_id, session_id: session_id)
-    }
-    
     func setupRecording() {
         let speak_enabled = RWFrameworkConfig.getConfigValueAsBool("speak_enabled")
         if (speak_enabled) {
@@ -272,176 +206,6 @@ extension RWFramework {
             self.apiProcessError(nil, error: error, caller: "apiGetTagCategories")
         }
     }
-
-    /// MARK: POST streams
-    public func apiPostStreams(at location: CLLocation? = nil) {
-        if requestStreamInProgress
-            || requestStreamSucceeded
-            || !postSessionsSucceeded { return }
-
-        requestStreamInProgress = true
-        lastRecordedLocation = locationManager.location!
-
-        let session_id = RWFrameworkConfig.getConfigValueAsNumber("session_id", group: RWFrameworkConfig.ConfigGroup.client)
-        
-        var lat: String = "0.1", lng: String = "0.1"
-        if let loc = location?.coordinate {
-            lat = doubleToStringWithZeroAsEmptyString(loc.latitude)
-            lng = doubleToStringWithZeroAsEmptyString(loc.longitude)
-        }
-
-        httpPostStreams(session_id, latitude: lat, longitude: lng).always {
-            self.requestStreamInProgress = false
-        }.then { data -> Data in
-            try self.postStreamsSuccess(data, session_id: session_id)
-            self.rwPostStreamsSuccess(data)
-            return data
-        }.catch { error in 
-            self.rwPostStreamsFailure(error)
-            self.apiProcessError(nil, error: error, caller: "apiPostStreams")
-        }
-    }
-
-    private func postStreamsSuccess(_ data: Data, session_id: NSNumber) throws {
-        if let dict = try? RWFramework.decoder.decode(Stream.self, from: data) {
-            if let stream_url = dict.url {
-                self.streamURL = URL(string: stream_url)!
-                if let stream_id = dict.id {
-                    self.streamID = stream_id
-//                    self.createPlayer()
-                    self.requestStreamSucceeded = true
-                    // pause stream on server so that assets aren't added until user is actually listening
-                    apiPostStreamsIdPause()
-                }
-            }
-
-            // TODO: can we still expect this here?
-            func requestStreamDisplayUserMessage(_ userMessage: String?) {
-                if (userMessage != nil && userMessage!.lengthOfBytes(using: String.Encoding.utf8) > 0) {
-                    self.rwUpdateStatus(userMessage!, title: "Out of Range!")
-                }
-            }
-            requestStreamDisplayUserMessage(dict.userMessage)
-        }
-    }
-
-    /// MARK: PATCH streams id
-    public func apiPatchStreamsIdWithLocation(
-        _ newLocation: CLLocation,
-        tagIds: String? = nil,
-        streamPatchOptions: [String: Any] = [:]
-    ) {
-        if (requestStreamSucceeded == false || self.streamID == 0) { return }
-
-        let latitude = doubleToStringWithZeroAsEmptyString(newLocation.coordinate.latitude)
-        let longitude = doubleToStringWithZeroAsEmptyString(newLocation.coordinate.longitude)
-        httpPatchStreamsId(
-            self.streamID.description,
-            tagIds: tagIds,
-            latitude: latitude,
-            longitude: longitude,
-            streamPatchOptions: streamPatchOptions
-        ).then { data in
-            self.rwPatchStreamsIdSuccess(data)
-        }.catch { error in 
-            self.rwPatchStreamsIdFailure(error)
-            self.apiProcessError(nil, error: error, caller: "apiPatchStreamsIdWithLocation")
-        }
-    }
-
-    func apiPatchStreamsIdWithTags(_ tag_ids: String, streamPatchOptions: [String: Any] = [:]) {
-        if (requestStreamSucceeded == false) { return }
-        if (self.streamID == 0) { return }
-
-        httpPatchStreamsId(self.streamID.description, tagIds: tag_ids, streamPatchOptions: streamPatchOptions).then { data in
-            self.rwPatchStreamsIdSuccess(data)
-        }.catch { error in
-            self.rwPatchStreamsIdFailure(error)
-            self.apiProcessError(nil, error: error, caller: "apiPatchStreamsIdWithTags")
-        }
-    }
-
-    /// MARK: POST streams id heartbeat
-    func apiPostStreamsIdHeartbeat() {
-        if (requestStreamSucceeded == false) { return }
-        if (self.streamID == 0) { return }
-
-        httpPostStreamsIdHeartbeat(self.streamID.description).then { data in
-            self.rwPostStreamsIdHeartbeatSuccess(data)
-        }.catch { error in
-            self.rwPostStreamsIdHeartbeatFailure(error)
-            self.apiProcessError(nil, error: error, caller: "apiPostStreamsIdHeartbeat")  
-        }
-    }
-
-    /// MARK: POST streams id replay
-    func apiPostStreamsIdReplay() {
-        if (requestStreamSucceeded == false) { return }
-        if (self.streamID == 0) { return }
-        
-        httpPostStreamsIdReplay(self.streamID.description).then { data in
-            self.rwPostStreamsIdReplaySuccess(data)
-        }.catch { error in
-            self.rwPostStreamsIdReplayFailure(error)
-            self.apiProcessError(nil, error: error, caller: "apiPostStreamsIdReplay")
-        }
-    }
-
-    /// MARK: POST streams id skip
-    func apiPostStreamsIdSkip() {
-        if (requestStreamSucceeded == false) { return }
-        if (self.streamID == 0) { return }
-        
-        httpPostStreamsIdSkip(self.streamID.description).then { data in
-            self.rwPostStreamsIdSkipSuccess(data)
-        }.catch { error in
-            self.rwPostStreamsIdSkipFailure(error)
-            self.apiProcessError(nil, error: error, caller: "apiPostStreamsIdSkip")     
-        }
-    }
-    
-    
-    /// MARK: POST streams id pause
-    func apiPostStreamsIdPause() {
-        if (requestStreamSucceeded == false) { return }
-        if (self.streamID == 0) { return }
-        
-        httpPostStreamsIdPause(self.streamID.description).then { data in
-            self.rwPostStreamsIdPauseSuccess(data)
-        }.catch { error in
-            self.rwPostStreamsIdPauseFailure(error)
-            self.apiProcessError(nil, error: error, caller: "apiPostStreamsIdPause")
-        }
-    }
-    
-    
-    /// MARK: POST streams id resume
-    func apiPostStreamsIdResume() {
-        if (requestStreamSucceeded == false) { return }
-        if (self.streamID == 0) { return }
-        
-        httpPostStreamsIdResume(self.streamID.description).then { data in
-            self.rwPostStreamsIdResumeSuccess(data)
-        }.catch { error in
-            self.rwPostStreamsIdResumeFailure(error)
-            self.apiProcessError(nil, error: error, caller: "apiPostStreamsIdResume")
-        }
-    }
-    
-    
-    /// MARK: GET streams id isactive
-    func apiGetStreamsIdIsActive() {
-        if (requestStreamSucceeded == false) { return }
-        if (self.streamID == 0) { return }
-        
-        httpGetStreamsIdIsActive(self.streamID.description).then { data in
-            self.rwGetStreamsIdIsActiveSuccess(data)
-        }.catch { error in
-            self.rwGetStreamsIdIsActiveFailure(error)
-            self.apiProcessError(nil, error: error, caller: "apiGetStreamsIdIsActive")
-        }
-    }
-
 
     /// MARK: POST envelopes
     func apiPostEnvelopes() -> Promise<Int> {
