@@ -365,7 +365,7 @@ struct MostRecentFilter: AssetFilter {
     }
     
     func keep(_ asset: Asset, playlist: Playlist, track: AudioTrack) -> AssetPriority {
-        let timeSinceCreated = Date().timeIntervalSince(asset.createdDate ?? Date())
+        let timeSinceCreated = Date().timeIntervalSince(asset.createdDate)
         if timeSinceCreated > maxAge {
             return .discard
         } else {
