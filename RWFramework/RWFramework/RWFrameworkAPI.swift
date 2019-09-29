@@ -22,7 +22,7 @@ extension RWFramework {
     }
 
     /// MARK: POST users
-    func apiPostUsers(_ device_id: String, client_type: String, client_system: String) -> Promise<Void> {
+    private func apiPostUsers(_ device_id: String, client_type: String, client_system: String) -> Promise<Void> {
         let token = RWFrameworkConfig.getConfigValueAsString("token", group: RWFrameworkConfig.ConfigGroup.client)
         
         if (token.lengthOfBytes(using: String.Encoding.utf8) > 0) {
@@ -66,7 +66,7 @@ extension RWFramework {
 
 
     /// MARK: POST sessions
-    func apiPostSessions() -> Promise<Data> {
+    private func apiPostSessions() -> Promise<Data> {
         let project_id = RWFrameworkConfig.getConfigValueAsNumber("project_id")
         let client_system = clientSystem()
         let language = preferredLanguage()
@@ -126,7 +126,7 @@ extension RWFramework {
     }
 
     /// MARK: GET projects id
-    func apiGetProjectsId(_ project_id: NSNumber, session_id: NSNumber) -> Promise<Data> {
+    private func apiGetProjectsId(_ project_id: NSNumber, session_id: NSNumber) -> Promise<Data> {
         return httpGetProjectsId(project_id, session_id: session_id).then { data -> Data in
             self.rwGetProjectsIdSuccess(data)
             return data
@@ -136,7 +136,7 @@ extension RWFramework {
         }
     }
 
-    func setupRecording() {
+    private func setupRecording() {
         let speak_enabled = RWFrameworkConfig.getConfigValueAsBool("speak_enabled")
         if (speak_enabled) {
             startAudioTimer()
@@ -146,7 +146,7 @@ extension RWFramework {
     }
 
     /// MARK: GET ui config
-    func apiGetUIConfig(_ project_id: NSNumber, session_id: NSNumber) {
+    private func apiGetUIConfig(_ project_id: NSNumber, session_id: NSNumber) {
         httpGetUIConfig(project_id, session_id: session_id).then { data in
             // Save data to UserDefaults for later access
             UserDefaults.standard.set(data, forKey: "uiconfig")
@@ -161,7 +161,7 @@ extension RWFramework {
 
 
     /// MARK: GET projects id tags
-    func apiGetProjectsIdTags(_ project_id: NSNumber, session_id: NSNumber) -> Promise<Data> {
+    private func apiGetProjectsIdTags(_ project_id: NSNumber, session_id: NSNumber) -> Promise<Data> {
         return httpGetProjectsIdTags(project_id, session_id: session_id).then { data -> Data in
             // Save data to UserDefaults for later access
             UserDefaults.standard.set(data, forKey: "tags")
@@ -176,7 +176,7 @@ extension RWFramework {
     }
 
     /// MARK: GET projects id uigroups
-    func apiGetProjectsIdUIGroups(_ project_id: NSNumber, session_id: NSNumber) -> Promise<Data> {
+    private func apiGetProjectsIdUIGroups(_ project_id: NSNumber, session_id: NSNumber) -> Promise<Data> {
         return httpGetProjectsIdUIGroups(project_id, session_id: session_id).then { data -> Data in
             // Save data to UserDefaults for later access
             UserDefaults.standard.set(data, forKey: "ui_groups")
@@ -195,7 +195,7 @@ extension RWFramework {
     }
     
     /// MARK: GET tagcategories
-    func apiGetTagCategories() -> Promise<Data> {
+    private func apiGetTagCategories() -> Promise<Data> {
         return httpGetTagCategories().then { data -> Data in
             UserDefaults.standard.set(data, forKey: "tagcategories")
             self.getTagCategoriesSucceeded = true
@@ -236,7 +236,7 @@ extension RWFramework {
         }
     }
     
-    func patchEnvelopesSuccess(_ data: Data) {
+    private func patchEnvelopesSuccess(_ data: Data) {
         do {
             let json = try JSONSerialization.jsonObject(with: data, options: JSONSerialization.ReadingOptions.mutableContainers)
             
@@ -259,8 +259,7 @@ extension RWFramework {
 
     // Not needed on client - not implementing for now
     
-    
-    public func apiGetAudioTracks(_ dict: [String:String]) -> Promise<[AudioTrack]> {
+    func apiGetAudioTracks(_ dict: [String:String]) -> Promise<[AudioTrack]> {
         return httpGetAudioTracks(dict).then { data in
             try RWFramework.decoder.decode([AudioTrack].self, from: data)
         }.catch { error in
@@ -269,7 +268,7 @@ extension RWFramework {
     }
 
     /// MARK: GET assets PUBLIC
-    public func apiGetAssets(_ dict: [String:String]) -> Promise<[Asset]> {
+    func apiGetAssets(_ dict: [String:String]) -> Promise<[Asset]> {
         return httpGetAssets(dict).then { data -> [Asset] in
             self.rwGetAssetsSuccess(data)
             return try RWFramework.decoder.decode([Asset].self, from: data)
@@ -278,8 +277,8 @@ extension RWFramework {
             self.apiProcessError(nil, error: error, caller: "apiGetAssets")
         }
     }
-
-    public func apiGetTimedAssets(_ dict: [String:String]) -> Promise<[TimedAsset]> {
+    
+    func apiGetTimedAssets(_ dict: [String:String]) -> Promise<[TimedAsset]> {
         return httpGetTimedAssets(dict).then { data -> [TimedAsset] in
             return try RWFramework.decoder.decode([TimedAsset].self, from: data)
         }.catch { error in
@@ -346,7 +345,7 @@ extension RWFramework {
         return httpGetVotesSummary(type: type, projectId: projectId, assetId: assetId)
     }
     
-    public func apiGetSpeakers(_ dict: [String:String]) -> Promise<[Speaker]> {
+    func apiGetSpeakers(_ dict: [String:String]) -> Promise<[Speaker]> {
         return httpGetSpeakers(dict).then { data -> [Speaker] in
             self.rwGetSpeakersSuccess(data)
             return try RWFramework.decoder.decode([Speaker].self, from: data)
