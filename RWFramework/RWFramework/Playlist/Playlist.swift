@@ -23,7 +23,13 @@ public class Playlist {
     // server communication
     private var updateTimer: Repeater? = nil
     private(set) var currentParams: StreamParams? = nil
-    private(set) var startTime = Date()
+
+    private var timePlayedSoFar: Double = 0
+    private var lastResume = Date()
+
+    var totalPlayedTime: Double {
+        return timePlayedSoFar + Date().timeIntervalSince(lastResume)
+    }
 
     // assets and filters
     private var filters: AllAssetFilters
@@ -185,9 +191,6 @@ extension Playlist {
      * Retrieve the list of all assets and check for new assets every few minutes.
     **/
     private func afterSessionInit() {
-        // Mark start of the session
-        startTime = Date()
-
         // Load cached assets first
         loadAssetPool()
         
@@ -211,6 +214,9 @@ extension Playlist {
 
     func pause() {
         if isPlaying {
+            // Record how long we played for
+            timePlayedSoFar = sessionPlayedTime
+
             for s in speakers { s.pause() }
             for t in tracks { t.pause() }
             if demoLooper != nil {
@@ -221,6 +227,9 @@ extension Playlist {
     
     func resume() {
         if !isPlaying {
+            // Mark start of the playing section
+            lastResume = Date()
+
             for s in speakers { s.resume() }
             for t in tracks { t.resume() }
             if demoLooper != nil {
